@@ -498,13 +498,12 @@ class GatewayService: ObservableObject {
         return try await sendRPC("agents.create", params: params)?.dictionary
     }
 
-    /// Update an existing agent's metadata (name, model, avatar, emoji, etc.)
-    func updateAgent(agentId: String, name: String? = nil, model: String? = nil, avatar: String? = nil, emoji: String? = nil) async throws -> [String: Any]? {
+    /// Update an existing agent's metadata fields supported by agents.update.
+    func updateAgent(agentId: String, name: String? = nil, model: String? = nil, avatar: String? = nil) async throws -> [String: Any]? {
         var params: [String: Any] = ["agentId": agentId]
         if let name   = name   { params["name"]   = name }
         if let model  = model  { params["model"]  = model }
         if let avatar = avatar { params["avatar"] = avatar }
-        if let emoji  = emoji  { params["emoji"]  = emoji }
         return try await sendRPC("agents.update", params: params)?.dictionary
     }
 

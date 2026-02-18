@@ -54,8 +54,13 @@ class AgentsViewModel: ObservableObject {
             let updatedAgents: [Agent] = rawAgents.map { raw -> Agent in
                 let id    = raw["id"]    as? String ?? UUID().uuidString
                 let ident = raw["identity"] as? [String: Any]
-                let rawName = (ident?["name"]  as? String) ?? (raw["name"]  as? String) ?? id
-                let emoji   = (ident?["emoji"] as? String) ?? "🤖"
+                let gatewayName = (ident?["name"]  as? String) ?? (raw["name"]  as? String) ?? id
+                let gatewayEmoji = (ident?["emoji"] as? String) ?? "🤖"
+                let localConfig = settingsService.settings.localAgents.first(where: { $0.id == id })
+                let localName = localConfig?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let rawName = (localName?.isEmpty == false ? (localName ?? gatewayName) : gatewayName)
+                let localEmoji = localConfig?.emoji
+                let emoji = (localEmoji?.isEmpty == false ? (localEmoji ?? gatewayEmoji) : gatewayEmoji)
 
                 // Preserve existing agent's runtime state if already known
                 let modelId = (ident?["model"] as? String) ?? (raw["model"] as? String)
@@ -214,20 +219,46 @@ class AgentsViewModel: ObservableObject {
     }
 
     func updateAgent(agentId: String, name: String? = nil, emoji: String? = nil, model: String? = nil, identityContent: String? = nil) async throws {
-        _ = try await gatewayService.updateAgent(agentId: agentId, name: name, model: model, emoji: emoji)
+        let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = (trimmedName?.isEmpty == true) ? nil : trimmedName
+        let shouldSendGatewayUpdate = finalName != nil || model != nil
+
+        if shouldSendGatewayUpdate {
+            _ = try await gatewayService.updateAgent(agentId: agentId, name: finalName, model: model)
+        }
 
         if let identity = identityContent {
             _ = try? await gatewayService.setAgentFile(agentId: agentId, name: "IDENTITY.md", content: identity)
         }
 
+        if let emoji = emoji {
+            saveLocalAgentOverride(agentId: agentId) { config in
+                config.emoji = emoji
+            }
+        }
+
         // Update local state immediately
         if let idx = agents.firstIndex(where: { $0.id == agentId }) {
-            if let name  = name  { agents[idx].name  = name }
+            if let name = finalName { agents[idx].name = name }
             if let emoji = emoji { agents[idx].emoji = emoji }
             if let model = model {
                 agents[idx].model = model
                 agents[idx].modelName = availableModels.first(where: { $0.id == model })?.name
             }
+        }
+    }
+
+    private func saveLocalAgentOverride(agentId: String, update: (inout LocalAgentConfig) -> Void) {
+        settingsService.update { settings in
+            var localAgents = settings.localAgents
+            var config = localAgents.first(where: { $0.id == agentId }) ?? LocalAgentConfig(id: agentId)
+            update(&config)
+            if let idx = localAgents.firstIndex(where: { $0.id == agentId }) {
+                localAgents[idx] = config
+            } else {
+                localAgents.append(config)
+            }
+            settings.localAgents = localAgents
         }
     }
 

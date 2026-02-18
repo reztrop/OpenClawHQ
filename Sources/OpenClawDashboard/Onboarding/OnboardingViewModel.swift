@@ -215,8 +215,8 @@ class OnboardingViewModel: ObservableObject {
         // Update main agent name/emoji if changed
         if let main = mainAgent {
             let nameTrimmed = agentName.trimmingCharacters(in: .whitespaces)
-            if !nameTrimmed.isEmpty && (nameTrimmed != main.name || agentEmoji != main.emoji) {
-                _ = try? await svc.updateAgent(agentId: main.id, name: nameTrimmed, emoji: agentEmoji)
+            if !nameTrimmed.isEmpty && nameTrimmed != main.name {
+                _ = try? await svc.updateAgent(agentId: main.id, name: nameTrimmed)
             }
 
             // Save avatar paths into settings
@@ -225,6 +225,7 @@ class OnboardingViewModel: ObservableObject {
             config.activeAvatarPath = activeImagePath
             config.idleAvatarPath = idleImagePath
             config.displayName = nameTrimmed.isEmpty ? nil : nameTrimmed
+            config.emoji = agentEmoji
             if let idx = localAgents.firstIndex(where: { $0.id == main.id }) {
                 localAgents[idx] = config
             } else {

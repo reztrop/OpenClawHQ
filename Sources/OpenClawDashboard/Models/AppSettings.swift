@@ -3,9 +3,10 @@ import Foundation
 // Stores per-agent local overrides (avatar paths etc.)
 struct LocalAgentConfig: Codable, Identifiable {
     var id: String           // agentId
-    var displayName: String?
-    var activeAvatarPath: String?
-    var idleAvatarPath: String?
+    var displayName: String? = nil
+    var emoji: String? = nil
+    var activeAvatarPath: String? = nil
+    var idleAvatarPath: String? = nil
 }
 
 struct AppSettings: Codable {
