@@ -7,14 +7,16 @@ enum AppTab: String, CaseIterable {
     case tasks = "Tasks"
     case usage = "Usage"
     case activity = "Activity"
+    case settings = "Settings"
 
     var icon: String {
         switch self {
-        case .agents: return "cpu"
-        case .chat: return "bubble.left.and.bubble.right"
-        case .tasks: return "checklist"
-        case .usage: return "chart.bar"
+        case .agents:   return "cpu"
+        case .chat:     return "bubble.left.and.bubble.right"
+        case .tasks:    return "checklist"
+        case .usage:    return "chart.bar"
         case .activity: return "list.bullet.rectangle"
+        case .settings: return "gearshape"
         }
     }
 }

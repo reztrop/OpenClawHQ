@@ -49,10 +49,6 @@ struct ContentView: View {
             }
             .listStyle(.sidebar)
 
-            // API Connections panel — always visible, not inside a scroll container
-            ProviderSettingsView(settingsService: appViewModel.settingsService)
-
-            // Connection status footer
             connectionStatus
         }
         .background(Theme.darkBackground)
@@ -172,6 +168,10 @@ struct ContentView: View {
             UsageView()
         case .activity:
             ActivityLogView()
+        case .settings:
+            SettingsView()
+                .environmentObject(appViewModel.settingsService)
+                .environmentObject(appViewModel.gatewayService)
         }
     }
 }

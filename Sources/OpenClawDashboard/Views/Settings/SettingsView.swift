@@ -1,9 +1,42 @@
 import SwiftUI
 
+// MARK: - Known Providers
+
+private struct KnownProvider {
+    let id: String
+    let displayName: String
+    let icon: String
+}
+
+private let knownProviders: [KnownProvider] = [
+    KnownProvider(id: "openai-codex",  displayName: "OpenAI Codex",  icon: "sparkles"),
+    KnownProvider(id: "anthropic",     displayName: "Anthropic",      icon: "brain"),
+    KnownProvider(id: "openai",        displayName: "OpenAI",         icon: "bolt.fill"),
+    KnownProvider(id: "google",        displayName: "Google",         icon: "globe"),
+    KnownProvider(id: "mistral",       displayName: "Mistral",        icon: "wind"),
+    KnownProvider(id: "deepseek",      displayName: "DeepSeek",       icon: "water.waves"),
+    KnownProvider(id: "cohere",        displayName: "Cohere",         icon: "link"),
+    KnownProvider(id: "groq",          displayName: "Groq",           icon: "bolt"),
+    KnownProvider(id: "xai",           displayName: "xAI / Grok",     icon: "xmark.circle"),
+    KnownProvider(id: "meta",          displayName: "Meta / Llama",   icon: "theatermasks"),
+]
+
+private func providerDisplayName(_ id: String) -> String {
+    knownProviders.first { $0.id == id }?.displayName
+        ?? id.replacingOccurrences(of: "-", with: " ").capitalized
+}
+
+private func providerIcon(_ id: String) -> String {
+    knownProviders.first { $0.id == id }?.icon ?? "cpu"
+}
+
+// MARK: - Settings View
+
 struct SettingsView: View {
     @EnvironmentObject var settingsService: SettingsService
     @EnvironmentObject var gatewayService: GatewayService
 
+    // Gateway fields
     @State private var host: String = ""
     @State private var port: String = ""
     @State private var token: String = ""
@@ -14,77 +47,215 @@ struct SettingsView: View {
     @State private var isTesting: Bool = false
     @State private var savedConfirmation: Bool = false
 
+    // Provider detection
+    @State private var detectedProviders: [String] = []
+
     var body: some View {
-        Form {
-            Section("Gateway Connection") {
-                TextField("Host", text: $host)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Port", text: $port)
-                    .textFieldStyle(.roundedBorder)
-                SecureField("Auth Token", text: $token)
-                    .textFieldStyle(.roundedBorder)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
 
-                HStack {
-                    Button("Test Connection") {
-                        testConnection()
+                // MARK: API Connections
+                settingsSection("API Connections", icon: "key.fill") {
+                    if detectedProviders.isEmpty {
+                        Text("No providers found in ~/.openclaw/agents/main/agent/auth.json")
+                            .font(.callout)
+                            .foregroundColor(Theme.textMuted)
+                            .padding(.vertical, 4)
+                    } else {
+                        VStack(spacing: 0) {
+                            ForEach(detectedProviders, id: \.self) { pid in
+                                providerRow(pid)
+                                if pid != detectedProviders.last {
+                                    Divider().background(Theme.darkBorder).padding(.leading, 40)
+                                }
+                            }
+                        }
+                        .background(Theme.darkSurface)
+                        .cornerRadius(10)
                     }
-                    .disabled(isTesting)
+                    Text("Only models from enabled providers will appear in the Chat model picker.")
+                        .font(.caption)
+                        .foregroundColor(Theme.textMuted)
+                }
 
-                    if isTesting {
-                        ProgressView()
-                            .scaleEffect(0.6)
+                // MARK: Gateway Connection
+                settingsSection("Gateway Connection", icon: "antenna.radiowaves.left.and.right") {
+                    VStack(spacing: 10) {
+                        labeledField("Host") {
+                            TextField("127.0.0.1", text: $host)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        labeledField("Port") {
+                            TextField("18789", text: $port)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        labeledField("Auth Token") {
+                            SecureField("token", text: $token)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        HStack(spacing: 10) {
+                            Button("Test Connection") { testConnection() }
+                                .disabled(isTesting)
+                            if isTesting { ProgressView().scaleEffect(0.7) }
+                            if let result = testResult {
+                                Text(result)
+                                    .font(.caption)
+                                    .foregroundColor(result.contains("Success") ? .green : .red)
+                            }
+                            Spacer()
+                        }
                     }
+                    .padding(14)
+                    .background(Theme.darkSurface)
+                    .cornerRadius(10)
+                }
 
-                    if let result = testResult {
-                        Text(result)
-                            .font(.caption)
-                            .foregroundColor(result.contains("Success") ? .green : .red)
+                // MARK: Display
+                settingsSection("Display", icon: "paintbrush") {
+                    VStack(spacing: 0) {
+                        Toggle("Enable Notifications", isOn: $enableNotifications)
+                            .padding(14)
+                        Divider().background(Theme.darkBorder)
+                        Toggle("Show Offline Agents", isOn: $showOfflineAgents)
+                            .padding(14)
+                        Divider().background(Theme.darkBorder)
+                        HStack {
+                            Text("Auto-Refresh Interval")
+                                .foregroundColor(.white)
+                            Spacer()
+                            Picker("", selection: $refreshInterval) {
+                                Text("15 sec").tag(15)
+                                Text("30 sec").tag(30)
+                                Text("60 sec").tag(60)
+                                Text("Off").tag(0)
+                            }
+                            .pickerStyle(.menu)
+                            .frame(width: 100)
+                        }
+                        .padding(14)
                     }
+                    .background(Theme.darkSurface)
+                    .cornerRadius(10)
                 }
-            }
 
-            Section("Notifications") {
-                Toggle("Enable Notifications", isOn: $enableNotifications)
-            }
+                // MARK: Save / Reset
+                HStack(spacing: 12) {
+                    Button("Reset to Defaults") {
+                        settingsService.resetToDefaults()
+                        loadFromSettings()
+                        detectedProviders = readAuthProviders()
+                    }
+                    .foregroundColor(Theme.textMuted)
 
-            Section("Display") {
-                Picker("Auto-Refresh Interval", selection: $refreshInterval) {
-                    Text("15 seconds").tag(15)
-                    Text("30 seconds").tag(30)
-                    Text("60 seconds").tag(60)
-                    Text("Off").tag(0)
-                }
-                Toggle("Show Offline Agents", isOn: $showOfflineAgents)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 450, height: 380)
-        .onAppear {
-            loadFromSettings()
-        }
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Reset to Defaults") {
-                    settingsService.resetToDefaults()
-                    loadFromSettings()
-                }
-            }
-            ToolbarItem(placement: .confirmationAction) {
-                HStack(spacing: 8) {
+                    Spacer()
+
                     if savedConfirmation {
                         Text("Saved")
-                            .font(.caption)
+                            .font(.callout)
                             .foregroundColor(.green)
                             .transition(.opacity)
                     }
-                    Button("Save") {
-                        saveSettings()
-                    }
-                    .keyboardShortcut(.return, modifiers: .command)
+
+                    Button("Save") { saveSettings() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.return, modifiers: .command)
                 }
             }
+            .padding(24)
+        }
+        .background(Theme.darkBackground)
+        .onAppear {
+            loadFromSettings()
+            detectedProviders = readAuthProviders()
+            seedEnabledProvidersIfNeeded()
         }
     }
+
+    // MARK: - Provider row
+
+    private func providerRow(_ pid: String) -> some View {
+        let enabled = isEnabled(pid)
+        return HStack(spacing: 12) {
+            Image(systemName: providerIcon(pid))
+                .foregroundColor(enabled ? Theme.jarvisBlue : Theme.textMuted)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(providerDisplayName(pid))
+                    .foregroundColor(enabled ? .white : Theme.textMuted)
+                Text(pid)
+                    .font(.caption2)
+                    .foregroundColor(Theme.textMuted)
+            }
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { isEnabled(pid) },
+                set: { _ in toggleProvider(pid) }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+        }
+        .padding(14)
+        .contentShape(Rectangle())
+        .onTapGesture { toggleProvider(pid) }
+    }
+
+    // MARK: - Section builder
+
+    private func settingsSection<Content: View>(
+        _ title: String, icon: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: icon)
+                .font(.headline)
+                .foregroundColor(.white)
+            content()
+        }
+    }
+
+    private func labeledField<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack {
+            Text(label)
+                .foregroundColor(Theme.textSecondary)
+                .frame(width: 80, alignment: .leading)
+            content()
+        }
+    }
+
+    // MARK: - Provider helpers
+
+    private func isEnabled(_ pid: String) -> Bool {
+        guard let list = settingsService.settings.enabledProviders else { return true }
+        return list.contains(pid)
+    }
+
+    private func toggleProvider(_ pid: String) {
+        settingsService.update { s in
+            var current = s.enabledProviders ?? detectedProviders
+            if current.contains(pid) {
+                current.removeAll { $0 == pid }
+            } else {
+                current.append(pid)
+            }
+            s.enabledProviders = current
+        }
+    }
+
+    private func seedEnabledProvidersIfNeeded() {
+        guard settingsService.settings.enabledProviders == nil else { return }
+        settingsService.update { s in s.enabledProviders = detectedProviders }
+    }
+
+    private func readAuthProviders() -> [String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = "\(home)/.openclaw/agents/main/agent/auth.json"
+        guard let data = FileManager.default.contents(atPath: path),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        return json.keys.sorted()
+    }
+
+    // MARK: - Gateway helpers
 
     private func loadFromSettings() {
         let s = settingsService.settings
@@ -110,25 +281,15 @@ struct SettingsView: View {
             s.showOfflineAgents = showOfflineAgents
         }
 
-        // Reconnect if gateway config changed
         if settingsService.settings.gatewayURL != previousURL || token != previousToken {
             gatewayService.disconnect()
-            gatewayService.connect(
-                host: host,
-                port: portInt,
-                token: token
-            )
+            gatewayService.connect(host: host, port: portInt, token: token)
         }
 
-        // Show confirmation feedback
-        withAnimation {
-            savedConfirmation = true
-        }
+        withAnimation { savedConfirmation = true }
         Task {
             try? await Task.sleep(for: .seconds(2))
-            withAnimation {
-                savedConfirmation = false
-            }
+            withAnimation { savedConfirmation = false }
         }
     }
 
@@ -138,21 +299,11 @@ struct SettingsView: View {
         Task {
             do {
                 let portInt = Int(port) ?? 18789
-                let testURL = "ws://\(host):\(portInt)"
-                var request = URLRequest(url: URL(string: testURL)!)
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                let session = URLSession(configuration: .default)
-                let ws = session.webSocketTask(with: request)
+                let ws = URLSession.shared.webSocketTask(with: URL(string: "ws://\(host):\(portInt)")!)
                 ws.resume()
-
-                // Try to send a ping
                 try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
                     ws.sendPing { error in
-                        if let error = error {
-                            cont.resume(throwing: error)
-                        } else {
-                            cont.resume()
-                        }
+                        if let e = error { cont.resume(throwing: e) } else { cont.resume() }
                     }
                 }
                 ws.cancel(with: .goingAway, reason: nil)

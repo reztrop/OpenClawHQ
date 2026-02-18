@@ -64,7 +64,7 @@ struct OpenClawDashboardApp: App {
                             await appViewModel.chatViewModel.refresh(agentIds: appViewModel.agentsViewModel.agents.map { $0.id })
                         case .usage:
                             await appViewModel.usageViewModel.fetchUsageData()
-                        case .activity, .tasks:
+                        case .activity, .tasks, .settings:
                             break
                         }
                     }
