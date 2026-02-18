@@ -92,8 +92,7 @@ struct AgentCard: View {
                 }
                 .buttonStyle(.plain)
                 .padding(8)
-                .opacity(isHovered ? 0.95 : 0)
-                .animation(.easeOut(duration: 0.15), value: isHovered)
+                .opacity(0.95)
             }
         }
     }
