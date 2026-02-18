@@ -77,12 +77,7 @@ struct ChatView: View {
 
             Picker("Agent", selection: $chatVM.selectedAgentId) {
                 ForEach(agentsVM.agents, id: \.id) { agent in
-                    Label {
-                        Text(agent.name)
-                    } icon: {
-                        Text(agent.emoji)
-                    }
-                    .tag(agent.id)
+                    Text("\(agent.emoji)  \(agent.name)").tag(agent.id)
                 }
             }
             .pickerStyle(.menu)

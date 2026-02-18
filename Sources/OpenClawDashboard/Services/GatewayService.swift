@@ -392,7 +392,8 @@ class GatewayService: ObservableObject {
         var params: [String: Any] = [
             "agentId": agentId,
             "message": message,
-            "thinking": thinkingEnabled ? "low" : "off"
+            "thinking": thinkingEnabled ? "low" : "off",
+            "idempotencyKey": UUID().uuidString
         ]
         if let sessionKey, !sessionKey.isEmpty {
             params["sessionKey"] = sessionKey
