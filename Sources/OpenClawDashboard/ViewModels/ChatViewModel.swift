@@ -22,6 +22,8 @@ struct ChatConversation: Identifiable, Hashable {
     var title: String
     var agentId: String
     var updatedAt: Date
+
+    var isDraft: Bool { id.hasPrefix("draft:") }
 }
 
 @MainActor
@@ -36,6 +38,7 @@ class ChatViewModel: ObservableObject {
     @Published var isSending = false
 
     private let gatewayService: GatewayService
+    private let maxInlineAttachmentChars = 12_000
 
     private var uploadsDir: String {
         NSString(string: "~/.openclaw/workspace/uploads/chat").expandingTildeInPath
@@ -75,15 +78,27 @@ class ChatViewModel: ObservableObject {
     }
 
     func startNewChat(defaultAgentId: String) {
-        selectedConversationId = nil
+        let draftId = "draft:\(UUID().uuidString)"
+        selectedConversationId = draftId
         selectedAgentId = defaultAgentId
         messages = []
         draftMessage = ""
         pendingAttachments = []
+
+        conversations.insert(
+            ChatConversation(id: draftId, title: "New Chat", agentId: defaultAgentId, updatedAt: Date()),
+            at: 0
+        )
     }
 
     func loadConversation(sessionKey: String) async {
         selectedConversationId = sessionKey
+
+        if sessionKey.hasPrefix("draft:") {
+            messages = []
+            return
+        }
+
         do {
             let history = try await gatewayService.fetchSessionHistory(sessionKey: sessionKey, limit: 200)
             messages = history
@@ -137,19 +152,27 @@ class ChatViewModel: ObservableObject {
 
         var finalMessage = trimmed
         if !pendingAttachments.isEmpty {
-            let filesList = pendingAttachments.map { "- \($0.fileName): \($0.localPath)" }.joined(separator: "\n")
-            finalMessage += "\n\nAttached files (available on disk):\n\(filesList)\nUse these files as reference for this conversation."
+            let attachmentContext = buildAttachmentContext(pendingAttachments)
+            finalMessage += "\n\n\(attachmentContext)"
         }
 
         do {
+            let outboundSessionKey: String? = {
+                guard let key = selectedConversationId, !key.hasPrefix("draft:") else { return nil }
+                return key
+            }()
+
             let response = try await gatewayService.sendAgentMessage(
                 agentId: selectedAgentId,
                 message: finalMessage,
-                sessionKey: selectedConversationId,
+                sessionKey: outboundSessionKey,
                 thinkingEnabled: thinkingEnabled
             )
 
             if let key = response.sessionKey {
+                if let old = selectedConversationId, old.hasPrefix("draft:"), let idx = conversations.firstIndex(where: { $0.id == old }) {
+                    conversations[idx] = ChatConversation(id: key, title: conversations[idx].title, agentId: selectedAgentId, updatedAt: Date())
+                }
                 selectedConversationId = key
             }
 
@@ -162,12 +185,13 @@ class ChatViewModel: ObservableObject {
                 if let idx = existing {
                     conversations[idx].updatedAt = Date()
                     conversations[idx].agentId = selectedAgentId
-                    if conversations[idx].title == "Chat" {
+                    if conversations[idx].title == "Chat" || conversations[idx].title == "New Chat" {
                         conversations[idx].title = String(title)
                     }
                 } else {
                     conversations.insert(ChatConversation(id: key, title: String(title), agentId: selectedAgentId, updatedAt: Date()), at: 0)
                 }
+                conversations.sort { $0.updatedAt > $1.updatedAt }
             }
         } catch {
             messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: "Error: \(error.localizedDescription)", createdAt: Date()))
@@ -175,6 +199,54 @@ class ChatViewModel: ObservableObject {
 
         pendingAttachments = []
         isSending = false
+    }
+
+    var selectedConversationIsLockedToAgent: Bool {
+        guard let key = selectedConversationId else { return false }
+        return !key.hasPrefix("draft:")
+    }
+
+    private func buildAttachmentContext(_ attachments: [ChatAttachment]) -> String {
+        let filesList = attachments.map { "- \($0.fileName): \($0.localPath)" }.joined(separator: "\n")
+        var blocks: [String] = [
+            "Attached files (available on disk):",
+            filesList,
+            "Automatically inspect each file before responding. Use the attached files as first-class context for this reply."
+        ]
+
+        let analyses = attachments.compactMap { analyzeAttachment($0) }
+        if !analyses.isEmpty {
+            blocks.append("\nAttachment Analysis (auto-ingested preview):")
+            blocks.append(analyses.joined(separator: "\n\n"))
+        }
+
+        return blocks.joined(separator: "\n")
+    }
+
+    private func analyzeAttachment(_ attachment: ChatAttachment) -> String? {
+        let url = URL(fileURLWithPath: attachment.localPath)
+        let ext = url.pathExtension.lowercased()
+        let textExtensions: Set<String> = [
+            "txt", "md", "markdown", "json", "yaml", "yml", "csv", "tsv", "xml",
+            "swift", "js", "ts", "jsx", "tsx", "py", "go", "rs", "java", "c", "cpp", "h", "hpp", "sh", "zsh", "sql"
+        ]
+
+        if textExtensions.contains(ext),
+           let data = FileManager.default.contents(atPath: attachment.localPath),
+           let text = String(data: data, encoding: .utf8) {
+            let excerpt = String(text.prefix(maxInlineAttachmentChars))
+            return "File: \(attachment.fileName)\nType: text\nPreview:\n\(excerpt)"
+        }
+
+        if ["png", "jpg", "jpeg", "gif", "webp", "heic"].contains(ext) {
+            return "File: \(attachment.fileName)\nType: image\nNote: Image attached at \(attachment.localPath). Inspect this image directly before answering."
+        }
+
+        if ext == "pdf" {
+            return "File: \(attachment.fileName)\nType: pdf\nNote: PDF attached at \(attachment.localPath). Extract and inspect this document before answering."
+        }
+
+        return "File: \(attachment.fileName)\nType: binary/other\nNote: Attached at \(attachment.localPath). Inspect if needed."
     }
 
     private func ensureUploadDirectory() {

@@ -54,10 +54,14 @@ class AgentsViewModel: ObservableObject {
                 let emoji   = (ident?["emoji"] as? String) ?? "🤖"
 
                 // Preserve existing agent's runtime state if already known
+                let modelId = (ident?["model"] as? String) ?? (raw["model"] as? String)
+
                 if let existing = agents.first(where: { $0.id == id }) {
                     var updated = existing
-                    updated.name          = rawName.isEmpty ? id : rawName
-                    updated.emoji         = emoji
+                    updated.name           = rawName.isEmpty ? id : rawName
+                    updated.emoji          = emoji
+                    updated.model          = modelId
+                    updated.modelName      = modelId
                     updated.isDefaultAgent = id == defaultId
                     return updated
                 }
@@ -70,6 +74,8 @@ class AgentsViewModel: ObservableObject {
                     status: gatewayService.isConnected ? .idle : .offline,
                     totalTokens: 0,
                     sessionCount: 0,
+                    model: modelId,
+                    modelName: modelId,
                     isDefaultAgent: id == defaultId
                 )
             }
@@ -84,6 +90,8 @@ class AgentsViewModel: ObservableObject {
             // Token counts from sessions
             let sessions = (try? await gatewayService.fetchSessionsList()) ?? []
             updateTokenCounts(from: sessions)
+
+            await migrateSparkModelsIfNeeded()
 
         } catch {
             print("[AgentsVM] Failed to refresh: \(error)")
@@ -145,7 +153,15 @@ class AgentsViewModel: ObservableObject {
 
         do {
             let raw = try await gatewayService.fetchModels()
-            availableModels = raw.compactMap { dict -> ModelInfo? in
+            let preferredFragments = [
+                "gpt-5.3-codex",
+                "gpt-5.2-codex",
+                "gpt-5.1-codex-max",
+                "gpt-5.2",
+                "gpt-5.1-codex-mini"
+            ]
+
+            let allModels = raw.compactMap { dict -> ModelInfo? in
                 guard let id = dict["id"] as? String else { return nil }
                 return ModelInfo(
                     id: id,
@@ -155,6 +171,13 @@ class AgentsViewModel: ObservableObject {
                     supportsReasoning: dict["reasoning"] as? Bool ?? false
                 )
             }
+
+            let filtered = allModels.filter { model in
+                let key = "\(model.id) \(model.name)".lowercased()
+                return preferredFragments.contains(where: { key.contains($0) })
+            }
+
+            availableModels = filtered.isEmpty ? allModels.filter { !"\($0.id) \($0.name)".lowercased().contains("spark") } : filtered
         } catch {
             print("[AgentsVM] Failed to load models: \(error)")
         }
@@ -219,6 +242,33 @@ class AgentsViewModel: ObservableObject {
                 agents.append(agent)
             }
         }
+    }
+
+    private func migrateSparkModelsIfNeeded() async {
+        let sparkAgents = agents.filter { ($0.model ?? "").lowercased().contains("spark") }
+        guard !sparkAgents.isEmpty else { return }
+
+        for agent in sparkAgents {
+            let replacement = recommendedModel(for: agent)
+            do {
+                _ = try await gatewayService.updateAgent(agentId: agent.id, model: replacement)
+                if let idx = agents.firstIndex(where: { $0.id == agent.id }) {
+                    agents[idx].model = replacement
+                    agents[idx].modelName = replacement
+                }
+            } catch {
+                print("[AgentsVM] model migration failed for \(agent.id): \(error)")
+            }
+        }
+    }
+
+    private func recommendedModel(for agent: Agent) -> String {
+        let key = "\(agent.id) \(agent.name)".lowercased()
+        if key.contains("jarvis") { return "openai/gpt-5.3-codex" }
+        if key.contains("scope") { return "openai/gpt-5.1-codex-max" }
+        if key.contains("prism") || key.contains("atlas") { return "openai/gpt-5.2" }
+        if key.contains("matrix") { return "openai/gpt-5.2-codex" }
+        return "openai/gpt-5.2-codex"
     }
 
     // MARK: - Event Subscriptions

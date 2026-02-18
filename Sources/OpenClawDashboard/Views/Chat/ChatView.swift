@@ -82,6 +82,13 @@ struct ChatView: View {
             }
             .pickerStyle(.menu)
             .frame(width: 220)
+            .disabled(chatVM.selectedConversationIsLockedToAgent)
+
+            if chatVM.selectedConversationIsLockedToAgent {
+                Text("Agent is fixed for this conversation. Start a new chat to switch.")
+                    .font(.caption2)
+                    .foregroundColor(Theme.textMuted)
+            }
 
             Toggle("Thinking", isOn: $chatVM.thinkingEnabled)
                 .toggleStyle(.switch)
@@ -104,7 +111,7 @@ struct ChatView: View {
                     if chatVM.isSending {
                         HStack(spacing: 8) {
                             ProgressView().scaleEffect(0.8).tint(Theme.jarvisBlue)
-                            Text("Jarvis is thinking...")
+                            Text("\(selectedAgentName()) is thinking...")
                                 .font(.caption)
                                 .foregroundColor(Theme.textMuted)
                             Spacer()
@@ -179,7 +186,7 @@ struct ChatView: View {
                 }
                 .buttonStyle(.bordered)
 
-                TextField("Message Jarvis...", text: $chatVM.draftMessage, axis: .vertical)
+                TextField("Message \(selectedAgentName())...", text: $chatVM.draftMessage, axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.plain)
                     .foregroundColor(.white)
@@ -263,5 +270,9 @@ struct ChatView: View {
             return jarvis.id
         }
         return agentsVM.defaultAgentId ?? agentsVM.agents.first?.id ?? "jarvis"
+    }
+
+    private func selectedAgentName() -> String {
+        agentsVM.agents.first(where: { $0.id == chatVM.selectedAgentId })?.name ?? "Agent"
     }
 }
