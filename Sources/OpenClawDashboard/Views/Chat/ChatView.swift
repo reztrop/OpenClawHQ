@@ -108,27 +108,43 @@ struct ChatView: View {
 
     @State private var showImporter = false
     @State private var isTargetedForDrop = false
+    @State private var isSidebarCollapsed = false
 
     init(chatViewModel: ChatViewModel) {
         _chatVM = StateObject(wrappedValue: chatViewModel)
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                topBar
-                Divider().background(Theme.darkBorder)
-                messagesArea
-                Divider().background(Theme.darkBorder)
-                composer
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                VStack(spacing: 0) {
+                    topBar
+                    Divider().background(Theme.darkBorder)
+                    messagesArea
+                    Divider().background(Theme.darkBorder)
+                    composer
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if !isSidebarCollapsed {
+                    Divider().background(Theme.darkBorder)
+
+                    sidebar
+                        .frame(width: 320)
+                        .background(Theme.darkSurface.opacity(0.7))
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Divider().background(Theme.darkBorder)
-
-            sidebar
-                .frame(width: 320)
-                .background(Theme.darkSurface.opacity(0.7))
+            .onAppear {
+                if geo.size.width < 1180 {
+                    isSidebarCollapsed = true
+                }
+            }
+            .onChange(of: geo.size.width) { _, newWidth in
+                if newWidth < 980 {
+                    isSidebarCollapsed = true
+                }
+            }
         }
         .background(Theme.darkBackground)
         .task {
@@ -212,6 +228,18 @@ struct ChatView: View {
             }
 
             Spacer()
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isSidebarCollapsed.toggle()
+                }
+            } label: {
+                Label(isSidebarCollapsed ? "Show Conversations" : "Hide Conversations",
+                      systemImage: isSidebarCollapsed ? "rectangle.leadinghalf.filled" : "rectangle.righthalf.filled")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.bordered)
+            .help(isSidebarCollapsed ? "Show Conversations" : "Hide Conversations")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
