@@ -395,18 +395,22 @@ class GatewayService: ObservableObject {
         return "agent:\(agentId):main"
     }
 
-    func sendAgentMessage(agentId: String, message: String, sessionKey: String?, thinkingEnabled: Bool) async throws -> AgentMessageResponse {
+    func sendAgentMessage(agentId: String, message: String, sessionKey: String?, thinkingEnabled: Bool, modelId: String? = nil) async throws -> AgentMessageResponse {
         let resolvedSessionKey = resolveSessionKey(agentId: agentId, explicitKey: sessionKey)
         let idempotencyKey = UUID().uuidString
 
         // Step 1: Send the message via `agent` RPC — returns { runId, status: "accepted" }
-        let agentParams: [String: Any] = [
+        var agentParams: [String: Any] = [
             "message": message,
             "agentId": agentId,
             "sessionKey": resolvedSessionKey,
             "idempotencyKey": idempotencyKey,
             "thinking": thinkingEnabled ? "low" : "off"
         ]
+        // If the user has manually selected a model override, forward it to the gateway.
+        if let modelId = modelId, !modelId.isEmpty {
+            agentParams["model"] = modelId
+        }
         let agentResult = try await sendRPCWithTimeout("agent", params: agentParams, timeout: 30)
         let agentDict = agentResult?.dictionary ?? [:]
         guard let runId = agentDict["runId"] as? String, !runId.isEmpty else {

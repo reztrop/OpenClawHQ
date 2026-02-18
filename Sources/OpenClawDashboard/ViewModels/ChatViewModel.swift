@@ -167,7 +167,8 @@ class ChatViewModel: ObservableObject {
                 agentId: selectedAgentId,
                 message: finalMessage,
                 sessionKey: outboundSessionKey,
-                thinkingEnabled: thinkingEnabled
+                thinkingEnabled: thinkingEnabled,
+                modelId: selectedModelId
             )
 
             if let key = response.sessionKey {

@@ -133,6 +133,12 @@ class AgentsViewModel: ObservableObject {
         isLoadingModels = true
         defer { isLoadingModels = false }
 
+        // Read auth.json to determine which providers the user has authenticated.
+        // Keys in auth.json are provider IDs (e.g. "openai-codex", "anthropic").
+        // models.list returns ALL 724 static catalog models regardless of auth, so we
+        // must cross-reference locally — the gateway has no "available only" RPC.
+        let authenticatedProviders = loadAuthenticatedProviders()
+
         do {
             let raw = try await gatewayService.fetchModels()
 
@@ -147,13 +153,33 @@ class AgentsViewModel: ObservableObject {
                 )
             }
 
-            // models.list only returns providers that are connected/authenticated —
-            // no Anthropic models appear unless Anthropic is set up, etc.
-            // The only synthetic entry to strip is the auto-appended "spark" fallback.
-            availableModels = allModels.filter { !$0.id.lowercased().contains("spark") }
+            // Filter to only models whose provider is in the authenticated set.
+            // If auth.json cannot be read (empty set), fall back to showing all models.
+            let filtered: [ModelInfo]
+            if authenticatedProviders.isEmpty {
+                filtered = allModels
+            } else {
+                filtered = allModels.filter { authenticatedProviders.contains($0.provider) }
+            }
+
+            // Additionally strip the synthetic "spark" fallback model that the gateway
+            // always appends regardless of auth state.
+            availableModels = filtered.filter { !$0.id.lowercased().contains("spark") }
         } catch {
             print("[AgentsVM] Failed to load models: \(error)")
         }
+    }
+
+    /// Reads ~/.openclaw/agents/main/agent/auth.json and returns the set of
+    /// authenticated provider IDs (the top-level keys of that JSON object).
+    private func loadAuthenticatedProviders() -> Set<String> {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let authPath = "\(home)/.openclaw/agents/main/agent/auth.json"
+        guard let data = FileManager.default.contents(atPath: authPath),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
+        }
+        return Set(json.keys)
     }
 
     // MARK: - Agent CRUD
