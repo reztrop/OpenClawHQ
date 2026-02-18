@@ -102,29 +102,11 @@ class AgentsViewModel: ObservableObject {
     // MARK: - Status Update
 
     private func updateFromStatus(_ status: [String: Any]) {
-        if let runs = status["runs"] as? [String: Any] {
-            let activeIds = Set(
-                (runs["active"] as? [[String: Any]] ?? [])
-                    .compactMap { $0["agentId"] as? String }
-            )
-            for i in agents.indices {
-                if activeIds.contains(agents[i].id) {
-                    agents[i].status = .busy
-                }
-            }
-        }
-
-        if let presence = status["presence"] as? [[String: Any]] {
-            for p in presence {
-                if let agentId = p["agentId"] as? String,
-                   let idx = agents.firstIndex(where: { $0.id == agentId }) {
-                    if agents[idx].status == .idle || agents[idx].status == .offline {
-                        agents[idx].status = .online
-                    }
-                    agents[idx].lastSeen = Date()
-                }
-            }
-        }
+        // The `status` RPC returns session/heartbeat data — it does not carry
+        // per-agent live run state. Agent status (.busy/.online) is driven entirely
+        // by `agent` lifecycle events received in handleAgentEvent().
+        // Agents start as .idle when connected; events update them from there.
+        _ = status
     }
 
     private func updateTokenCounts(from sessions: [[String: Any]]) {
@@ -286,17 +268,24 @@ class AgentsViewModel: ObservableObject {
     }
 
     private func handleAgentEvent(_ data: [String: Any]) {
-        let agentId = data["agentId"] as? String ?? "main"
-        let status  = data["status"]  as? String
+        // Agent events have: { runId, stream, seq, data: { phase?, text? }, sessionKey }
+        // agentId is encoded in the sessionKey as "agent:{agentId}:{rest}"
+        guard let sessionKey = data["sessionKey"] as? String else { return }
+        let agentId = agentIdFromSessionKey(sessionKey)
 
-        if let idx = agents.firstIndex(where: { $0.id == agentId }) {
-            switch status {
-            case "running":
+        guard let idx = agents.firstIndex(where: { $0.id == agentId }) else { return }
+
+        let stream = data["stream"] as? String ?? ""
+        let eventData = data["data"] as? [String: Any]
+        let phase = eventData?["phase"] as? String
+
+        switch stream {
+        case "lifecycle":
+            switch phase {
+            case "start":
                 agents[idx].status = .busy
-                agents[idx].currentActivity = data["activity"] as? String
-                    ?? data["label"]    as? String
-                    ?? "Working..."
-            case "completed", "ok":
+                agents[idx].currentActivity = "Working..."
+            case "end":
                 agents[idx].status = .online
                 agents[idx].currentActivity = nil
             case "error":
@@ -305,19 +294,31 @@ class AgentsViewModel: ObservableObject {
             default:
                 break
             }
-            agents[idx].lastSeen = Date()
+        case "assistant":
+            // Text is streaming — agent is active
+            if agents[idx].status != .busy {
+                agents[idx].status = .busy
+            }
+        default:
+            break
         }
+        agents[idx].lastSeen = Date()
+    }
+
+    /// Extracts agentId from a session key like "agent:{agentId}:{rest}"
+    private func agentIdFromSessionKey(_ sessionKey: String) -> String {
+        let lower = sessionKey.lowercased()
+        guard lower.hasPrefix("agent:") else { return "main" }
+        let after = lower.dropFirst("agent:".count)
+        let agentId = after.components(separatedBy: ":").first ?? "main"
+        return agentId.isEmpty ? "main" : agentId
     }
 
     private func handlePresenceEvent(_ data: [String: Any]) {
-        if let map = data["agents"] as? [String: String] {
-            for (agentId, status) in map {
-                if let idx = agents.firstIndex(where: { $0.id == agentId }) {
-                    self.agents[idx].status  = AgentStatus(rawValue: status) ?? .offline
-                    self.agents[idx].lastSeen = Date()
-                }
-            }
-        }
+        // Presence events carry system presence (host, gateway, clients) not agent status.
+        // Agent status is driven entirely by `agent` lifecycle events.
+        // No-op: presence events don't contain per-agent status info.
+        _ = data
     }
 }
 
