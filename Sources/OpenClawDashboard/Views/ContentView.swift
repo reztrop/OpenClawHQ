@@ -10,32 +10,37 @@ struct ContentView: View {
             Theme.darkBackground.ignoresSafeArea()
 
             if appViewModel.showOnboarding {
-                // First-run onboarding wizard shown as a full window overlay
                 OnboardingView()
                     .environmentObject(appViewModel)
             } else if appViewModel.isLoading {
                 LoadingView()
             } else {
-                NavigationSplitView {
-                    sidebar
-                } detail: {
-                    detailView
-                }
-                .navigationSplitViewStyle(.balanced)
+                mainLayout
             }
         }
     }
 
-    // MARK: - Sidebar
+    // MARK: - Main Layout (replaces NavigationSplitView so we own the sidebar fully)
 
-    private var sidebar: some View {
+    private var mainLayout: some View {
+        HSplitView {
+            sidebarColumn
+                .frame(minWidth: 180, idealWidth: 210, maxWidth: 280)
+
+            detailView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: - Sidebar Column
+
+    private var sidebarColumn: some View {
         VStack(spacing: 0) {
-            // App title header
             sidebarHeader
 
             Divider().background(Theme.darkBorder)
 
-            // Tab navigation list — takes all remaining vertical space
+            // Tab list
             List(AppTab.allCases, id: \.self, selection: $appViewModel.selectedTab) { tab in
                 Label(tab.rawValue, systemImage: tab.icon)
                     .font(.headline)
@@ -44,15 +49,16 @@ struct ContentView: View {
             }
             .listStyle(.sidebar)
 
-            // API Connections toggle panel — passed settingsService directly
-            // to avoid environment object resolution issues inside NavigationSplitView
+            // API Connections panel — always visible, not inside a scroll container
             ProviderSettingsView(settingsService: appViewModel.settingsService)
 
-            // Connection status + settings gear
+            // Connection status footer
             connectionStatus
         }
-        .frame(minWidth: 180)
+        .background(Theme.darkBackground)
     }
+
+    // MARK: - Sidebar Header
 
     private var sidebarHeader: some View {
         VStack(spacing: 4) {
@@ -69,8 +75,11 @@ struct ContentView: View {
         .background(Theme.darkBackground)
     }
 
+    // MARK: - Connection Status Footer
+
     private var connectionStatus: some View {
         VStack(spacing: 6) {
+            Divider().background(Theme.darkBorder)
             HStack(spacing: 8) {
                 Circle()
                     .fill(appViewModel.gatewayService.isConnected ? Theme.statusOnline : Theme.statusOffline)
