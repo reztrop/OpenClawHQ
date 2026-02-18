@@ -1,5 +1,105 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
+
+// MARK: - Smart Composer Text View
+// NSViewRepresentable so we can intercept Enter vs Shift+Enter at the AppKit level.
+struct ComposerTextView: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onSend: () -> Void
+    var isSending: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        guard let textView = scrollView.documentView as? NSTextView else { return scrollView }
+
+        textView.delegate = context.coordinator
+        textView.isRichText = false
+        textView.font = .systemFont(ofSize: 13)
+        textView.textColor = .white
+        textView.backgroundColor = .clear
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.allowsUndo = true
+        textView.textContainerInset = NSSize(width: 4, height: 6)
+
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.backgroundColor = .clear
+        scrollView.drawsBackground = false
+
+        context.coordinator.textView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        context.coordinator.isSending = isSending
+
+        // Only update if the text actually changed (avoid cursor-jump loop)
+        if textView.string != text {
+            textView.string = text
+        }
+
+        // Placeholder visibility
+        context.coordinator.updatePlaceholder(textView, placeholder: placeholder)
+    }
+
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ComposerTextView
+        var isSending: Bool = false
+        weak var textView: NSTextView?
+        private var placeholderLabel: NSTextField?
+
+        init(_ parent: ComposerTextView) { self.parent = parent }
+
+        // Enter → send; Shift+Enter → newline
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                let shiftDown = NSApp.currentEvent?.modifierFlags.contains(.shift) ?? false
+                if shiftDown {
+                    textView.insertNewlineIgnoringFieldEditor(nil)
+                    return true
+                } else {
+                    if !isSending && !textView.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        parent.onSend()
+                    }
+                    return true
+                }
+            }
+            return false
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+            updatePlaceholder(textView, placeholder: parent.placeholder)
+        }
+
+        func updatePlaceholder(_ textView: NSTextView, placeholder: String) {
+            if placeholderLabel == nil {
+                let lbl = NSTextField(labelWithString: "")
+                lbl.textColor = NSColor.tertiaryLabelColor
+                lbl.font = .systemFont(ofSize: 13)
+                lbl.isEditable = false
+                lbl.isSelectable = false
+                lbl.isBordered = false
+                lbl.backgroundColor = .clear
+                textView.addSubview(lbl)
+                placeholderLabel = lbl
+            }
+            placeholderLabel?.stringValue = textView.string.isEmpty ? placeholder : ""
+            placeholderLabel?.frame = NSRect(x: 6, y: 4, width: textView.bounds.width - 12, height: 20)
+        }
+    }
+}
+
+// MARK: - Chat View
 
 struct ChatView: View {
     @EnvironmentObject var appViewModel: AppViewModel
@@ -68,36 +168,81 @@ struct ChatView: View {
         }
     }
 
+    // MARK: - Top Bar
+
     private var topBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Text("Chat")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
+                .fixedSize()
 
+            // Agent picker
             Picker("Agent", selection: $chatVM.selectedAgentId) {
                 ForEach(agentsVM.agents, id: \.id) { agent in
                     Text("\(agent.emoji)  \(agent.name)").tag(agent.id)
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 220)
+            .frame(width: 180)
             .disabled(chatVM.selectedConversationIsLockedToAgent)
 
-            if chatVM.selectedConversationIsLockedToAgent {
-                Text("Agent is fixed for this conversation. Start a new chat to switch.")
-                    .font(.caption2)
-                    .foregroundColor(Theme.textMuted)
+            // Model picker — only shown when conversation is not locked
+            if !chatVM.selectedConversationIsLockedToAgent {
+                modelPicker
             }
 
-            Toggle("Thinking", isOn: $chatVM.thinkingEnabled)
-                .toggleStyle(.switch)
-                .foregroundColor(Theme.textSecondary)
+            // Thinking toggle — fixed size label so it never wraps or rotates
+            HStack(spacing: 6) {
+                Toggle("", isOn: $chatVM.thinkingEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                Text("Thinking")
+                    .font(.subheadline)
+                    .foregroundColor(Theme.textSecondary)
+                    .fixedSize()
+            }
+
+            if chatVM.selectedConversationIsLockedToAgent {
+                Text("Agent fixed — start a new chat to switch")
+                    .font(.caption2)
+                    .foregroundColor(Theme.textMuted)
+                    .fixedSize()
+            }
 
             Spacer()
         }
-        .padding(14)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .task { await agentsVM.loadModels() }
     }
+
+    @ViewBuilder
+    private var modelPicker: some View {
+        let models = filteredModels
+        if !models.isEmpty {
+            Picker("Model", selection: $chatVM.selectedModelId) {
+                Text("Agent Default").tag(Optional<String>.none)
+                Divider()
+                ForEach(models) { model in
+                    Text(model.name).tag(Optional(model.id))
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: 200)
+        }
+    }
+
+    /// Models available for manual override — exclude spark variants and codex models.
+    private var filteredModels: [ModelInfo] {
+        agentsVM.availableModels.filter { m in
+            let key = "\(m.id) \(m.name)".lowercased()
+            return !key.contains("spark") && !key.contains("codex")
+        }
+    }
+
+    // MARK: - Messages Area
 
     private var messagesArea: some View {
         ScrollViewReader { proxy in
@@ -135,7 +280,7 @@ struct ChatView: View {
         HStack {
             if message.isUser { Spacer() }
             VStack(alignment: .leading, spacing: 6) {
-                Text(message.isUser ? "You" : "Assistant")
+                Text(message.isUser ? "You" : selectedAgentName())
                     .font(.caption2)
                     .foregroundColor(Theme.textMuted)
                 Text(message.text)
@@ -152,6 +297,8 @@ struct ChatView: View {
         .padding(.horizontal, 16)
     }
 
+    // MARK: - Composer
+
     private var composer: some View {
         VStack(spacing: 8) {
             if !chatVM.pendingAttachments.isEmpty {
@@ -160,8 +307,7 @@ struct ChatView: View {
                         ForEach(chatVM.pendingAttachments) { file in
                             HStack(spacing: 6) {
                                 Image(systemName: "doc")
-                                Text(file.fileName)
-                                    .lineLimit(1)
+                                Text(file.fileName).lineLimit(1)
                                 Button {
                                     chatVM.removeAttachment(file)
                                 } label: {
@@ -178,7 +324,7 @@ struct ChatView: View {
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
                 Button {
                     showImporter = true
                 } label: {
@@ -186,16 +332,17 @@ struct ChatView: View {
                 }
                 .buttonStyle(.bordered)
 
-                TextField("Message \(selectedAgentName())...", text: $chatVM.draftMessage, axis: .vertical)
-                    .lineLimit(1...6)
-                    .textFieldStyle(.plain)
-                    .foregroundColor(.white)
-                    .padding(10)
-                    .background(Theme.darkSurface)
-                    .cornerRadius(8)
-                    .onSubmit {
-                        Task { await chatVM.sendCurrentMessage() }
-                    }
+                // Scrollable multi-line composer with Enter-to-send / Shift+Enter for newline
+                ComposerTextView(
+                    text: $chatVM.draftMessage,
+                    placeholder: "Message \(selectedAgentName())…  (Shift+Enter for new line)",
+                    onSend: { Task { await chatVM.sendCurrentMessage() } },
+                    isSending: chatVM.isSending
+                )
+                .frame(minHeight: 36, maxHeight: 120)
+                .padding(6)
+                .background(Theme.darkSurface)
+                .cornerRadius(8)
 
                 Button {
                     Task { await chatVM.sendCurrentMessage() }
@@ -208,6 +355,8 @@ struct ChatView: View {
         }
         .padding(12)
     }
+
+    // MARK: - Sidebar
 
     private var sidebar: some View {
         VStack(spacing: 10) {
@@ -254,6 +403,8 @@ struct ChatView: View {
         }
         .padding(12)
     }
+
+    // MARK: - Helpers
 
     private func refreshData() async {
         await agentsVM.refreshAgents()

@@ -34,6 +34,7 @@ class ChatViewModel: ObservableObject {
     @Published var draftMessage: String = ""
     @Published var selectedAgentId: String = "jarvis"
     @Published var thinkingEnabled: Bool = false
+    @Published var selectedModelId: String? = nil   // nil = use the agent's default model
     @Published var pendingAttachments: [ChatAttachment] = []
     @Published var isSending = false
 

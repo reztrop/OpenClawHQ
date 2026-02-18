@@ -135,13 +135,6 @@ class AgentsViewModel: ObservableObject {
 
         do {
             let raw = try await gatewayService.fetchModels()
-            let preferredFragments = [
-                "gpt-5.3-codex",
-                "gpt-5.2-codex",
-                "gpt-5.1-codex-max",
-                "gpt-5.2",
-                "gpt-5.1-codex-mini"
-            ]
 
             let allModels = raw.compactMap { dict -> ModelInfo? in
                 guard let id = dict["id"] as? String else { return nil }
@@ -154,12 +147,11 @@ class AgentsViewModel: ObservableObject {
                 )
             }
 
-            let filtered = allModels.filter { model in
-                let key = "\(model.id) \(model.name)".lowercased()
-                return preferredFragments.contains(where: { key.contains($0) })
+            // Exclude spark and codex-labelled models — these are internal/unavailable
+            availableModels = allModels.filter { m in
+                let key = "\(m.id) \(m.name)".lowercased()
+                return !key.contains("spark") && !key.contains("codex")
             }
-
-            availableModels = filtered.isEmpty ? allModels.filter { !"\($0.id) \($0.name)".lowercased().contains("spark") } : filtered
         } catch {
             print("[AgentsVM] Failed to load models: \(error)")
         }
