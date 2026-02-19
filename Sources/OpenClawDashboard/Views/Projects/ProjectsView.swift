@@ -17,7 +17,14 @@ struct ProjectsView: View {
                     Divider().background(Theme.darkBorder)
                     sidebar
                         .frame(width: 320)
-                        .background(Theme.darkSurface.opacity(0.7))
+                        .background(
+                            ZStack {
+                                Theme.darkSurface.opacity(0.7)
+                                Rectangle()
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(0.12)
+                            }
+                        )
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }

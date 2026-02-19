@@ -61,15 +61,22 @@ struct ContentView: View {
                     .font(.headline)
                     .foregroundColor(appViewModel.selectedTab == tab ? .white : Theme.textSecondary)
                     .padding(.vertical, 6)
-                    .listRowBackground(Theme.darkBackground)
+                    .listRowBackground(Theme.darkSurface.opacity(0.22))
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            .background(Theme.darkBackground)
+            .background(Color.clear)
 
             connectionStatus
         }
-        .background(Theme.darkBackground)
+        .background(
+            ZStack {
+                Theme.darkSurface.opacity(0.7)
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .opacity(0.12)
+            }
+        )
     }
 
     // MARK: - Sidebar Header
