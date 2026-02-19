@@ -162,6 +162,7 @@ struct ChatView: View {
             }
         }
         .background(Theme.darkBackground)
+        .preferredColorScheme(.dark)
         .task {
             await refreshData()
         }
