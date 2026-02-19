@@ -181,6 +181,7 @@ final class SkillsViewModel: ObservableObject {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
+            process.environment = Self.openClawProcessEnvironment()
 
             // macOS app bundles have a stripped PATH that excludes Homebrew.
             // openclaw.mjs uses `#!/usr/bin/env node`, so we must ensure node
@@ -238,7 +239,7 @@ final class SkillsViewModel: ObservableObject {
         return try JSONDecoder().decode(type, from: data)
     }
 
-    private static func resolveOpenClawExecutablePath() -> String? {
+    nonisolated private static func resolveOpenClawExecutablePath() -> String? {
         let candidates = [
             "/opt/homebrew/bin/openclaw",
             "/usr/local/bin/openclaw",
@@ -248,6 +249,19 @@ final class SkillsViewModel: ObservableObject {
             return path
         }
         return nil
+    }
+
+    nonisolated private static func openClawProcessEnvironment() -> [String: String] {
+        var env = ProcessInfo.processInfo.environment
+        let required = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+        let current = env["PATH"] ?? ""
+        let currentParts = current.split(separator: ":").map(String.init)
+        var merged = required
+        for part in currentParts where !merged.contains(part) {
+            merged.append(part)
+        }
+        env["PATH"] = merged.joined(separator: ":")
+        return env
     }
 }
 
