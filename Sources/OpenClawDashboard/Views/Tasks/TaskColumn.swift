@@ -4,6 +4,7 @@ struct TaskColumn: View {
     let status: TaskStatus
     let tasks: [TaskItem]
     let onDrop: ([TaskItem]) -> Bool
+    let onMove: (UUID, TaskStatus) -> Void
     let onEdit: (TaskItem) -> Void
     let onDelete: (UUID) -> Void
 
@@ -48,7 +49,7 @@ struct TaskColumn: View {
                                 ForEach(TaskStatus.allCases, id: \.self) { targetStatus in
                                     if targetStatus != status {
                                         Button("Move to \(targetStatus.columnTitle)") {
-                                            _ = onDrop([var_task(task, status: targetStatus)])
+                                            onMove(task.id, targetStatus)
                                         }
                                     }
                                 }
@@ -81,9 +82,4 @@ struct TaskColumn: View {
         }
     }
 
-    private func var_task(_ task: TaskItem, status: TaskStatus) -> TaskItem {
-        var t = task
-        t.status = status
-        return t
-    }
 }

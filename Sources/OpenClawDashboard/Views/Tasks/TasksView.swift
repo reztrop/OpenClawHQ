@@ -17,6 +17,9 @@ struct TasksView: View {
                         onDrop: { droppedTasks in
                             tasksVM.handleDrop(of: droppedTasks, to: status)
                         },
+                        onMove: { taskId, targetStatus in
+                            tasksVM.moveTask(taskId, to: targetStatus)
+                        },
                         onEdit: { task in
                             tasksVM.startEditing(task)
                         },
