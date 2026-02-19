@@ -182,6 +182,9 @@ struct ContentView: View {
                 .environmentObject(appViewModel.projectsViewModel)
         case .tasks:
             TasksView()
+        case .skills:
+            SkillsView()
+                .environmentObject(appViewModel.skillsViewModel)
         case .usage:
             UsageView()
         case .activity:

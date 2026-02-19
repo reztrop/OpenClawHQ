@@ -11,6 +11,8 @@ enum Constants {
     static let tasksStateFilePath = NSString(string: "~/.openclaw/workspace/tasks_state.json").expandingTildeInPath
     static let projectsFilePath = NSString(string: "~/.openclaw/workspace/projects.json").expandingTildeInPath
     static let openclawConfigPath = NSString(string: "~/.openclaw/openclaw.json").expandingTildeInPath
+    static let managedSkillsDirectory = NSString(string: "~/.openclaw/skills").expandingTildeInPath
+    static let agentStateDirectory = NSString(string: "~/.openclaw/agents").expandingTildeInPath
 
     static let appName = "OpenClaw HQ"
     static let windowWidth: CGFloat = 1400

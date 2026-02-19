@@ -6,6 +6,7 @@ enum AppTab: String, CaseIterable {
     case chat = "Chat"
     case projects = "Projects"
     case tasks = "Tasks"
+    case skills = "Skills"
     case usage = "Usage"
     case activity = "Activity"
     case settings = "Settings"
@@ -16,6 +17,7 @@ enum AppTab: String, CaseIterable {
         case .chat:     return "bubble.left.and.bubble.right"
         case .projects: return "square.stack.3d.up"
         case .tasks:    return "checklist"
+        case .skills:   return "wand.and.stars"
         case .usage:    return "chart.bar"
         case .activity: return "list.bullet.rectangle"
         case .settings: return "gearshape"
@@ -39,6 +41,7 @@ class AppViewModel: ObservableObject {
     lazy var chatViewModel = ChatViewModel(gatewayService: gatewayService, settingsService: settingsService)
     lazy var projectsViewModel = ProjectsViewModel(gatewayService: gatewayService, taskService: taskService)
     lazy var tasksViewModel = TasksViewModel(taskService: taskService)
+    lazy var skillsViewModel = SkillsViewModel()
     lazy var usageViewModel = UsageViewModel(gatewayService: gatewayService)
     lazy var gatewayStatusViewModel = GatewayStatusViewModel(gatewayService: gatewayService)
     lazy var activityLogViewModel = ActivityLogViewModel(gatewayService: gatewayService)
@@ -129,5 +132,6 @@ class AppViewModel: ObservableObject {
 
     private func initialFetch() async {
         await agentsViewModel.refreshAgents()
+        await skillsViewModel.refreshSkills()
     }
 }
