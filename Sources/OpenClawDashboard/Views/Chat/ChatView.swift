@@ -483,7 +483,7 @@ struct ChatView: View {
                         Text("Add Files")
                             .font(.caption)
                     }
-                    .foregroundColor(Theme.textSecondary)
+                    .foregroundColor(.white)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 8)
@@ -517,7 +517,7 @@ struct ChatView: View {
                         Text(selectedTags.isEmpty ? "Tags" : "Tags (\(selectedTags.count))")
                             .font(.caption)
                     }
-                    .foregroundColor(Theme.textSecondary)
+                    .foregroundColor(.white)
                 }
                 .menuStyle(.borderlessButton)
                 .padding(.horizontal, 8)
