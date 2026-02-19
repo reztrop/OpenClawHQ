@@ -483,12 +483,12 @@ struct ChatView: View {
                         Text("Add Files")
                             .font(.caption)
                     }
-                        .foregroundColor(Theme.textMuted)
+                    .foregroundColor(Theme.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(Theme.darkSurface)
+                .background(Theme.darkAccent)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.darkBorder, lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
