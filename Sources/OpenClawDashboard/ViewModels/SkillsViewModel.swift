@@ -12,8 +12,10 @@ final class SkillsViewModel: ObservableObject {
     private var pollingTask: Task<Void, Never>?
     private var watchSource: DispatchSourceFileSystemObject?
     private var watchFD: CInt = -1
+    private let openclawExecutablePath: String?
 
     init() {
+        openclawExecutablePath = Self.resolveOpenClawExecutablePath()
         startPolling()
         startSkillsDirectoryWatch()
         refreshTask = Task { [weak self] in
@@ -167,10 +169,18 @@ final class SkillsViewModel: ObservableObject {
     }
 
     private func runOpenClawAndDecodeJSON(arguments: [String]) async throws -> Any {
+        guard let executable = openclawExecutablePath else {
+            throw NSError(
+                domain: "OpenClawHQ.Skills",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "OpenClaw CLI not found. Install it or ensure it exists at /opt/homebrew/bin/openclaw or /usr/local/bin/openclaw."]
+            )
+        }
+
         let data = try await Task.detached(priority: .userInitiated) {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["openclaw"] + arguments
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
 
             let stdout = Pipe()
             let stderr = Pipe()
@@ -215,6 +225,18 @@ final class SkillsViewModel: ObservableObject {
         }
         let data = try JSONSerialization.data(withJSONObject: target)
         return try JSONDecoder().decode(type, from: data)
+    }
+
+    private static func resolveOpenClawExecutablePath() -> String? {
+        let candidates = [
+            "/opt/homebrew/bin/openclaw",
+            "/usr/local/bin/openclaw",
+            "/usr/bin/openclaw"
+        ]
+        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
+            return path
+        }
+        return nil
     }
 }
 
