@@ -261,7 +261,19 @@ struct ChatView: View {
     private var modelPicker: some View {
         let models = filteredModels
         if !models.isEmpty {
-            Picker("Model", selection: $chatVM.selectedModelId) {
+            Picker("Model", selection: Binding(
+                get: { chatVM.selectedModelId },
+                set: { newId in
+                    guard newId != chatVM.selectedModelId else { return }
+                    chatVM.selectedModelId = newId
+                    // Persist the model choice on the agent so the gateway uses it.
+                    // Model selection must go through agents.update — not the agent RPC.
+                    if let modelId = newId, !modelId.isEmpty {
+                        let agentId = chatVM.currentAgentId
+                        Task { try? await agentsVM.updateAgent(agentId: agentId, model: modelId) }
+                    }
+                }
+            )) {
                 Text("Agent Default").tag(Optional<String>.none)
                 Divider()
                 ForEach(models) { model in

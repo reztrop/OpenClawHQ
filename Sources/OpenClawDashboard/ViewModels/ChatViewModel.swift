@@ -35,6 +35,17 @@ class ChatViewModel: ObservableObject {
     @Published var selectedAgentId: String = "jarvis"
     @Published var thinkingEnabled: Bool = false
     @Published var selectedModelId: String? = nil   // nil = use the agent's default model
+
+    /// The agent that will receive the next message — derived from the active conversation
+    /// or falls back to selectedAgentId.
+    var currentAgentId: String {
+        if let key = selectedConversationId,
+           !key.hasPrefix("draft:"),
+           let convo = conversations.first(where: { $0.id == key }) {
+            return convo.agentId
+        }
+        return selectedAgentId
+    }
     @Published var pendingAttachments: [ChatAttachment] = []
     @Published var isSending = false
 
@@ -210,8 +221,7 @@ class ChatViewModel: ObservableObject {
                 agentId: outboundAgentId,
                 message: finalMessage,
                 sessionKey: outboundSessionKey,
-                thinkingEnabled: thinkingEnabled,
-                modelId: selectedModelId
+                thinkingEnabled: thinkingEnabled
             )
 
             if let key = response.sessionKey {
