@@ -480,10 +480,11 @@ struct ChatView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "paperclip")
                             .font(.caption)
+                            .foregroundColor(.white)
                         Text("Add Files")
                             .font(.caption)
+                            .foregroundColor(.white)
                     }
-                    .foregroundColor(.white)
                 }
                 .buttonStyle(.plain)
                 .padding(.horizontal, 8)
@@ -514,10 +515,11 @@ struct ChatView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "tag")
                             .font(.caption)
+                            .foregroundColor(.white)
                         Text(selectedTags.isEmpty ? "Tags" : "Tags (\(selectedTags.count))")
                             .font(.caption)
+                            .foregroundColor(.white)
                     }
-                    .foregroundColor(.white)
                 }
                 .menuStyle(.borderlessButton)
                 .padding(.horizontal, 8)
