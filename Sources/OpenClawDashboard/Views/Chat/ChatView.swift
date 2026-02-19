@@ -431,16 +431,30 @@ struct ChatView: View {
                 .background(Theme.darkSurface)
                 .cornerRadius(8)
 
-                Button {
-                    Task { await chatVM.sendCurrentMessage() }
-                } label: {
-                    Image(systemName: "paperplane.fill")
+                if chatVM.isSending {
+                    // Stop button — cancels the in-flight run
+                    Button {
+                        chatVM.stopCurrentRun()
+                    } label: {
+                        Image(systemName: "stop.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .transition(.scale.combined(with: .opacity))
+                } else {
+                    // Send button
+                    Button {
+                        Task { await chatVM.sendCurrentMessage() }
+                    } label: {
+                        Image(systemName: "paperplane.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        chatVM.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && chatVM.pendingAttachments.isEmpty
+                    )
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(
-                    (chatVM.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && chatVM.pendingAttachments.isEmpty)
-                    || chatVM.isSending
-                )
             }
         }
         .padding(12)

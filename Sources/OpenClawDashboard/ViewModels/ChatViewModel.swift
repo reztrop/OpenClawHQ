@@ -64,6 +64,8 @@ class ChatViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Session key of the in-flight message, used to filter streaming events to this conversation.
     private var activeRunSessionKey: String? = nil
+    /// The Task wrapping the current sendAgentMessage call — cancelled by stopCurrentRun().
+    private var sendTask: Task<Void, Never>? = nil
 
     private var uploadsDir: String {
         NSString(string: "~/.openclaw/workspace/uploads/chat").expandingTildeInPath
@@ -286,12 +288,33 @@ class ChatViewModel: ObservableObject {
         // Seed the streaming bubble immediately so the UI shows activity right away.
         streamingText = ""
 
-        do {
-            let outboundSessionKey = activeRunSessionKey
-
-            let response = try await gatewayService.sendAgentMessage(
+        // Run the gateway call in a tracked Task so stopCurrentRun() can cancel it.
+        let task = Task {
+            await performSend(
                 agentId: outboundAgentId,
                 message: finalMessage,
+                userVisibleText: userVisibleText
+            )
+        }
+        sendTask = task
+        await task.value
+        sendTask = nil
+    }
+
+    /// Cancels the in-flight agent run immediately.
+    /// The streaming bubble commits whatever text was already received, then closes.
+    func stopCurrentRun() {
+        sendTask?.cancel()
+        sendTask = nil
+    }
+
+    private func performSend(agentId: String, message: String, userVisibleText: String) async {
+        let outboundSessionKey = activeRunSessionKey
+
+        do {
+            let response = try await gatewayService.sendAgentMessage(
+                agentId: agentId,
+                message: message,
                 sessionKey: outboundSessionKey,
                 thinkingEnabled: thinkingEnabled
             )
@@ -300,7 +323,7 @@ class ChatViewModel: ObservableObject {
                 // Update session key so streaming events after this point are filtered correctly.
                 activeRunSessionKey = key
                 if let old = selectedConversationId, old.hasPrefix("draft:"), let idx = conversations.firstIndex(where: { $0.id == old }) {
-                    conversations[idx] = ChatConversation(id: key, title: conversations[idx].title, agentId: outboundAgentId, updatedAt: Date())
+                    conversations[idx] = ChatConversation(id: key, title: conversations[idx].title, agentId: agentId, updatedAt: Date())
                 }
                 selectedConversationId = key
             }
@@ -313,30 +336,14 @@ class ChatViewModel: ObservableObject {
                 ? "(No response — the agent may still be processing. Try refreshing the conversation.)"
                 : finalText
 
-            // Clear the streaming buffer before appending the committed message
-            streamingText = nil
-            activeRunSessionKey = nil
+            commitResponse(text: assistantText, agentId: agentId, userVisibleText: userVisibleText)
 
-            messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: assistantText, createdAt: Date()))
+        } catch where Task.isCancelled || (error as? CancellationError) != nil {
+            // User tapped stop — commit whatever streamed so far (may be empty)
+            let partial = streamingText ?? ""
+            let committedText = partial.isEmpty ? "(Stopped.)" : partial + "\n\n*(Stopped)*"
+            commitResponse(text: committedText, agentId: agentId, userVisibleText: userVisibleText)
 
-            if let key = selectedConversationId {
-                let title = generateConversationTitle(from: userVisibleText, fallback: messages.first(where: { $0.isUser })?.text ?? "Chat")
-                let existing = conversations.firstIndex { $0.id == key }
-                if let idx = existing {
-                    conversations[idx].updatedAt = Date()
-                    conversations[idx].agentId = outboundAgentId
-                    if isGenericTitle(conversations[idx].title) {
-                        conversations[idx].title = title
-                    }
-                } else {
-                    conversations.insert(ChatConversation(id: key, title: title, agentId: outboundAgentId, updatedAt: Date()), at: 0)
-                }
-                saveChatConfig(sessionKey: key) { config in
-                    config.customTitle = title
-                    config.isArchived = false
-                }
-                conversations.sort { $0.updatedAt > $1.updatedAt }
-            }
         } catch {
             streamingText = nil
             activeRunSessionKey = nil
@@ -345,6 +352,32 @@ class ChatViewModel: ObservableObject {
 
         pendingAttachments = []
         isSending = false
+    }
+
+    private func commitResponse(text: String, agentId: String, userVisibleText: String) {
+        streamingText = nil
+        activeRunSessionKey = nil
+
+        messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: text, createdAt: Date()))
+
+        if let key = selectedConversationId {
+            let title = generateConversationTitle(from: userVisibleText, fallback: messages.first(where: { $0.isUser })?.text ?? "Chat")
+            let existing = conversations.firstIndex { $0.id == key }
+            if let idx = existing {
+                conversations[idx].updatedAt = Date()
+                conversations[idx].agentId = agentId
+                if isGenericTitle(conversations[idx].title) {
+                    conversations[idx].title = title
+                }
+            } else {
+                conversations.insert(ChatConversation(id: key, title: title, agentId: agentId, updatedAt: Date()), at: 0)
+            }
+            saveChatConfig(sessionKey: key) { config in
+                config.customTitle = title
+                config.isArchived = false
+            }
+            conversations.sort { $0.updatedAt > $1.updatedAt }
+        }
     }
 
     private func userFacingSendError(_ error: Error) -> String {
