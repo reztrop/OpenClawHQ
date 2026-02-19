@@ -61,8 +61,11 @@ struct ContentView: View {
                     .font(.headline)
                     .foregroundColor(appViewModel.selectedTab == tab ? .white : Theme.textSecondary)
                     .padding(.vertical, 6)
+                    .listRowBackground(Theme.darkBackground)
             }
             .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
+            .background(Theme.darkBackground)
 
             connectionStatus
         }
