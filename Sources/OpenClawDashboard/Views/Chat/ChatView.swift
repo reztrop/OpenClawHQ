@@ -302,27 +302,65 @@ struct ChatView: View {
                             .id(message.id)
                     }
 
+                    // Live streaming bubble — shows text as tokens arrive.
+                    // Visible whenever isSending is true, even before text accumulates.
                     if chatVM.isSending {
-                        HStack(spacing: 8) {
-                            ProgressView().scaleEffect(0.8).tint(Theme.jarvisBlue)
-                            Text("\(selectedAgentName()) is thinking...")
-                                .font(.caption)
-                                .foregroundColor(Theme.textMuted)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 16)
+                        streamingBubble
+                            .id(chatVM.streamingBubbleId)
                     }
                 }
                 .padding(.vertical, 12)
             }
             .onChange(of: chatVM.messages.count) { _, _ in
                 if let last = chatVM.messages.last {
-                    withAnimation {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+            .onChange(of: chatVM.streamingText) { _, _ in
+                // Keep streaming bubble pinned to bottom as text grows
+                withAnimation(.linear(duration: 0.05)) {
+                    proxy.scrollTo(chatVM.streamingBubbleId, anchor: .bottom)
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var streamingBubble: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(selectedAgentName())
+                        .font(.caption2)
+                        .foregroundColor(Theme.textMuted)
+                    // Pulsing dot to show live activity
+                    Circle()
+                        .fill(Theme.jarvisBlue)
+                        .frame(width: 5, height: 5)
+                        .opacity(0.8)
+                }
+
+                if let text = chatVM.streamingText, !text.isEmpty {
+                    // Live text streaming in
+                    Text(text)
+                        .font(.body)
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Theme.darkSurface)
+                        .cornerRadius(12)
+                        .textSelection(.enabled)
+                } else {
+                    // No text yet — show animated ellipsis while agent is starting up
+                    ThinkingDotsView()
+                        .padding(12)
+                        .background(Theme.darkSurface)
+                        .cornerRadius(12)
+                }
+            }
+            .frame(maxWidth: 700, alignment: .leading)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
     }
 
     private func messageBubble(_ message: ChatMessage) -> some View {
@@ -503,6 +541,29 @@ struct ChatView: View {
             }
         } else if appViewModel.isMainSidebarCollapsed {
             appViewModel.isMainSidebarCollapsed = false
+        }
+    }
+}
+
+// MARK: - Thinking Dots
+
+/// Three animated dots shown in the streaming bubble before the first token arrives.
+struct ThinkingDotsView: View {
+    @State private var phase = 0
+
+    private let timer = Timer.publish(every: 0.45, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Color.white.opacity(phase == i ? 0.9 : 0.3))
+                    .frame(width: 7, height: 7)
+                    .animation(.easeInOut(duration: 0.3), value: phase)
+            }
+        }
+        .onReceive(timer) { _ in
+            phase = (phase + 1) % 3
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import UniformTypeIdentifiers
+import Combine
 
 struct ChatMessage: Identifiable, Hashable {
     let id: String
@@ -49,10 +50,20 @@ class ChatViewModel: ObservableObject {
     @Published var pendingAttachments: [ChatAttachment] = []
     @Published var isSending = false
 
+    /// Live-streaming assistant text. Non-nil while an agent is actively generating a response.
+    /// Rendered as an in-progress bubble in the UI; committed to `messages` once complete.
+    @Published var streamingText: String? = nil
+
+    /// The stable ID used for the streaming bubble so ScrollView can anchor to it.
+    let streamingBubbleId = "streaming-bubble"
+
     private let gatewayService: GatewayService
     private let settingsService: SettingsService
     private let maxInlineAttachmentChars = 12_000
     private let genericConversationTitles: Set<String> = ["Chat", "New Chat"]
+    private var cancellables = Set<AnyCancellable>()
+    /// Session key of the in-flight message, used to filter streaming events to this conversation.
+    private var activeRunSessionKey: String? = nil
 
     private var uploadsDir: String {
         NSString(string: "~/.openclaw/workspace/uploads/chat").expandingTildeInPath
@@ -62,6 +73,61 @@ class ChatViewModel: ObservableObject {
         self.gatewayService = gatewayService
         self.settingsService = settingsService
         ensureUploadDirectory()
+        subscribeToAgentEvents()
+    }
+
+    // MARK: - Streaming
+
+    private func subscribeToAgentEvents() {
+        gatewayService.agentEventSubject
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in self?.handleStreamingEvent(data) }
+            .store(in: &cancellables)
+    }
+
+    private func handleStreamingEvent(_ data: [String: Any]) {
+        guard isSending else { return }
+
+        // Only process events for the current conversation's session key.
+        // New chats use "agent:{agentId}:main" before a key is assigned.
+        let eventSessionKey = data["sessionKey"] as? String ?? ""
+        if let active = activeRunSessionKey {
+            guard eventSessionKey == active else { return }
+        } else {
+            // No session key yet (new chat) — accept any event matching the outbound agent
+            let agentId = data["agentId"] as? String
+                ?? agentIdFromSessionKey(eventSessionKey)
+            guard agentId == currentAgentId else { return }
+        }
+
+        let stream = data["stream"] as? String ?? ""
+        let eventData = data["data"] as? [String: Any]
+
+        switch stream {
+        case "assistant":
+            // Accumulate streaming text chunks as they arrive
+            if let chunk = eventData?["text"] as? String, !chunk.isEmpty {
+                streamingText = (streamingText ?? "") + chunk
+            }
+        case "lifecycle":
+            let phase = eventData?["phase"] as? String
+            if phase == "end" || phase == "error" {
+                // agent.wait / sendCurrentMessage will commit the final message.
+                // Just clear the streaming buffer here — sendCurrentMessage handles appending.
+                streamingText = nil
+                activeRunSessionKey = nil
+            }
+        default:
+            break
+        }
+    }
+
+    /// Extracts agentId from session key format "agent:{agentId}:{rest}"
+    private func agentIdFromSessionKey(_ sessionKey: String) -> String {
+        let lower = sessionKey.lowercased()
+        guard lower.hasPrefix("agent:") else { return "main" }
+        let after = lower.dropFirst("agent:".count)
+        return after.components(separatedBy: ":").first.map { String($0) } ?? "main"
     }
 
     func refresh(agentIds: [String]) async {
@@ -211,11 +277,17 @@ class ChatViewModel: ObservableObject {
             return selectedAgentId
         }()
 
+        // Set the session key so streaming events are filtered to this conversation.
+        // For new chats it will be nil until the gateway returns the actual key.
+        activeRunSessionKey = {
+            guard let key = selectedConversationId, !key.hasPrefix("draft:") else { return nil }
+            return key
+        }()
+        // Seed the streaming bubble immediately so the UI shows activity right away.
+        streamingText = ""
+
         do {
-            let outboundSessionKey: String? = {
-                guard let key = selectedConversationId, !key.hasPrefix("draft:") else { return nil }
-                return key
-            }()
+            let outboundSessionKey = activeRunSessionKey
 
             let response = try await gatewayService.sendAgentMessage(
                 agentId: outboundAgentId,
@@ -225,13 +297,26 @@ class ChatViewModel: ObservableObject {
             )
 
             if let key = response.sessionKey {
+                // Update session key so streaming events after this point are filtered correctly.
+                activeRunSessionKey = key
                 if let old = selectedConversationId, old.hasPrefix("draft:"), let idx = conversations.firstIndex(where: { $0.id == old }) {
                     conversations[idx] = ChatConversation(id: key, title: conversations[idx].title, agentId: outboundAgentId, updatedAt: Date())
                 }
                 selectedConversationId = key
             }
 
-            let assistantText = response.text.isEmpty ? "(No response — the agent may still be processing. Try refreshing the conversation.)" : response.text
+            // Prefer the streamed text we accumulated; fall back to the polled history text
+            // from agent.wait in case events were missed or out of order.
+            let accumulated = streamingText ?? ""
+            let finalText = accumulated.isEmpty ? response.text : accumulated
+            let assistantText = finalText.isEmpty
+                ? "(No response — the agent may still be processing. Try refreshing the conversation.)"
+                : finalText
+
+            // Clear the streaming buffer before appending the committed message
+            streamingText = nil
+            activeRunSessionKey = nil
+
             messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: assistantText, createdAt: Date()))
 
             if let key = selectedConversationId {
@@ -253,6 +338,8 @@ class ChatViewModel: ObservableObject {
                 conversations.sort { $0.updatedAt > $1.updatedAt }
             }
         } catch {
+            streamingText = nil
+            activeRunSessionKey = nil
             messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: "Error: \(error.localizedDescription)", createdAt: Date()))
         }
 
