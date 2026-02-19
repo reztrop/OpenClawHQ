@@ -74,6 +74,7 @@ struct CreateAgentForm: View {
     @State private var agentEmoji = "🤖"
     @State private var selectedModelId: String? = nil
     @State private var identityContent = ""
+    @State private var soulContent = ""
     @State private var activeImagePath: String? = nil
     @State private var idleImagePath: String? = nil
     @State private var isCreating = false
@@ -139,16 +140,51 @@ struct CreateAgentForm: View {
                         .environmentObject(gatewayService)
                 }
 
-                // Identity / System prompt
+                // Workspace files hint
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundColor(Theme.jarvisBlue)
+                    Text("Creating an agent writes IDENTITY.md, USER.md, SOUL.md, BOOTSTRAP.md, AGENTS.md, TOOLS.md, and HEARTBEAT.md to the workspace automatically.")
+                        .font(.caption)
+                        .foregroundColor(Theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(10)
+                .background(Theme.jarvisBlue.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                // Identity / Role
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("System Prompt / Identity (optional)").font(.caption).foregroundColor(Theme.textMuted)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Role & Identity").font(.caption).fontWeight(.medium).foregroundColor(Theme.textMuted)
+                        Text("What this agent is and does — written to IDENTITY.md").font(.caption2).foregroundColor(Theme.textMuted.opacity(0.7))
+                    }
                     TextEditor(text: $identityContent)
                         .font(.system(.body, design: .monospaced))
                         .foregroundColor(.white)
                         .scrollContentBackground(.hidden)
                         .background(Theme.darkSurface)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .frame(minHeight: 80, maxHeight: 160)
+                        .frame(minHeight: 80, maxHeight: 140)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8).stroke(Theme.darkBorder.opacity(0.4), lineWidth: 1)
+                        )
+                }
+
+                // Soul / Personality
+                VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Personality & Behavior").font(.caption).fontWeight(.medium).foregroundColor(Theme.textMuted)
+                        Text("Core values, operating style, how it should behave — written to SOUL.md").font(.caption2).foregroundColor(Theme.textMuted.opacity(0.7))
+                    }
+                    TextEditor(text: $soulContent)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white)
+                        .scrollContentBackground(.hidden)
+                        .background(Theme.darkSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .frame(minHeight: 80, maxHeight: 140)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8).stroke(Theme.darkBorder.opacity(0.4), lineWidth: 1)
                         )
@@ -194,7 +230,8 @@ struct CreateAgentForm: View {
                 name: agentName.trimmingCharacters(in: .whitespaces),
                 emoji: agentEmoji,
                 model: selectedModelId,
-                identityContent: identityContent.isEmpty ? nil : identityContent
+                identityContent: identityContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : identityContent,
+                soulContent: soulContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : soulContent
             )
             dismiss()
         } catch {
