@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AppKit
+import Foundation
 
 @MainActor
 class AgentsViewModel: ObservableObject {
@@ -247,6 +248,13 @@ class AgentsViewModel: ObservableObject {
             soulContent: soulContent,
             canCommunicateWithAgents: canCommunicateWithAgents
         )
+        ensureWorkspaceFilesExist(
+            workspacePath: workspace,
+            name: name,
+            emoji: emoji,
+            identityContent: identityContent,
+            soulContent: soulContent
+        )
 
         // Persist selected avatars (if any) into the dashboard avatar directory.
         try copySelectedAvatars(
@@ -260,23 +268,49 @@ class AgentsViewModel: ObservableObject {
 
         if bootOnStart {
             Task { [weak self] in
-                await self?.bootAgentOnStart(agentId: agentId, agentName: name)
+                await self?.bootAgentOnStart(
+                    agentId: agentId,
+                    agentName: name,
+                    emoji: emoji,
+                    identityContent: identityContent,
+                    soulContent: soulContent,
+                    bootRequested: true
+                )
             }
         }
     }
 
-    private func bootAgentOnStart(agentId: String, agentName: String) async {
+    private func bootAgentOnStart(
+        agentId: String,
+        agentName: String,
+        emoji: String,
+        identityContent: String?,
+        soulContent: String?,
+        bootRequested: Bool
+    ) async {
         let coordinatorId = preferredCoordinatorAgentId()
+        let identityText = identityContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let soulText = soulContent?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let bootRequest = """
-        A new agent was just created and needs immediate startup initialization.
+        A new agent was just created and needs formal onboarding handling.
         Agent ID: \(agentId)
         Agent Name: \(agentName)
+        Emoji: \(emoji)
+        Boot on Start selected: \(bootRequested ? "YES" : "NO")
 
-        Please perform a short boot handshake now:
-        1) Contact the new agent directly.
-        2) Confirm it replies and is ready to receive work.
-        3) Ask it to complete first-run bootstrap behavior.
-        4) Reply back with a one-line readiness status.
+        Handling requirements (must complete in order):
+        1) Confirm the agent exists and all expected files are present:
+           IDENTITY.md, SOUL.md, USER.md, TOOLS.md, AGENTS.md, BOOTSTRAP.md, MEMORY.md, HEARTBEAT.md
+        2) Use the natural language provided below to ensure IDENTITY.md and SOUL.md are implemented accordingly.
+        3) Verify each file is set and usable.
+        4) If Boot on Start is YES, initialize the new agent and confirm it can accept work now.
+        5) Return a concise verification summary with pass/fail per file and readiness status.
+
+        IDENTITY INPUT:
+        \(identityText.isEmpty ? "(none supplied)" : identityText)
+
+        SOUL INPUT:
+        \(soulText.isEmpty ? "(none supplied)" : soulText)
         """
 
         do {
@@ -285,15 +319,30 @@ class AgentsViewModel: ObservableObject {
             print("[AgentsVM] Coordinator boot request failed (\(coordinatorId)): \(error)")
         }
 
+        guard bootRequested else { return }
+
         // Always directly warm up the new agent so initialization is guaranteed even
         // if Jarvis does not immediately delegate.
         let directWarmup = """
-        Quick startup check: introduce yourself in one line and confirm you are online, initialized, and ready to receive tasks.
+        Startup check: read your workspace files, complete bootstrap behavior, then reply in one line with READY if you are initialized and able to accept tasks immediately.
         """
-        do {
-            _ = try await gatewayService.sendAgentCommand(agentId, message: directWarmup)
-        } catch {
-            print("[AgentsVM] Direct boot warmup failed (\(agentId)): \(error)")
+        var warmedUp = false
+        for attempt in 1...3 where !warmedUp {
+            do {
+                _ = try await gatewayService.sendAgentCommand(agentId, message: directWarmup)
+                warmedUp = true
+            } catch {
+                print("[AgentsVM] Direct boot warmup failed (\(agentId)) attempt \(attempt): \(error)")
+                try? await Task.sleep(for: .milliseconds(700))
+            }
+        }
+
+        if !warmedUp {
+            do {
+                try await warmupAgentViaCLI(agentId: agentId, message: directWarmup)
+            } catch {
+                print("[AgentsVM] CLI boot warmup failed (\(agentId)): \(error)")
+            }
         }
     }
 
@@ -646,6 +695,81 @@ class AgentsViewModel: ObservableObject {
             let idleDest = "\(Constants.avatarDirectory)/\(targetName)_idle.png"
             try copyAvatar(from: idleAvatarPath, to: idleDest)
         }
+    }
+
+    private func ensureWorkspaceFilesExist(
+        workspacePath: String,
+        name: String,
+        emoji: String,
+        identityContent: String?,
+        soulContent: String?
+    ) {
+        let fm = FileManager.default
+        let expected = [
+            "IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md",
+            "AGENTS.md", "BOOTSTRAP.md", "MEMORY.md", "HEARTBEAT.md"
+        ]
+
+        let fallbackIdentity = """
+        # IDENTITY.md - Who Am I?
+
+        - **Name:** \(name)
+        - **Emoji:** \(emoji)
+
+        ## Role
+        \(identityContent?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? (identityContent ?? "") : "Update this with a description of this agent's role and responsibilities.")
+        """
+        let fallbackSoul = """
+        # SOUL.md - Who You Are
+
+        \(soulContent?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? (soulContent ?? "") : "Do the job well. Be explicit about uncertainty. Stay within role boundaries.")
+        """
+        let fallbackByFile: [String: String] = [
+            "IDENTITY.md": fallbackIdentity,
+            "SOUL.md": fallbackSoul,
+            "USER.md": "# USER.md\n",
+            "TOOLS.md": "# TOOLS.md\n",
+            "AGENTS.md": "# AGENTS.md\n",
+            "BOOTSTRAP.md": "# BOOTSTRAP.md\n",
+            "MEMORY.md": "# MEMORY.md\n",
+            "HEARTBEAT.md": "# HEARTBEAT.md\n"
+        ]
+
+        for file in expected {
+            let path = "\(workspacePath)/\(file)"
+            let missing = !fm.fileExists(atPath: path)
+            let empty = (try? String(contentsOfFile: path, encoding: .utf8)
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ?? true
+            if (missing || empty), let fallback = fallbackByFile[file] {
+                try? fallback.write(toFile: path, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    private func warmupAgentViaCLI(agentId: String, message: String) async throws {
+        let candidates = ["/opt/homebrew/bin/openclaw", "/usr/local/bin/openclaw", "/usr/bin/openclaw"]
+        guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            throw NSError(domain: "OpenClawHQ", code: 10, userInfo: [NSLocalizedDescriptionKey: "openclaw CLI not found"])
+        }
+
+        try await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = ["agent", "--agent", agentId, "--channel", "last", "-m", message, "--json"]
+
+            var env = ProcessInfo.processInfo.environment
+            env["PATH"] = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].joined(separator: ":")
+            process.environment = env
+
+            process.standardOutput = Pipe()
+            process.standardError = Pipe()
+            try process.run()
+            process.waitUntilExit()
+
+            guard process.terminationStatus == 0 else {
+                throw NSError(domain: "OpenClawHQ", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "CLI warmup failed"])
+            }
+        }.value
     }
 
     private func saveLocalAgentOverride(agentId: String, update: (inout LocalAgentConfig) -> Void) {
