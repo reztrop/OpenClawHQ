@@ -496,6 +496,21 @@ struct ChatView: View {
                 if !chatVM.selectedConversationIsLockedToAgent {
                     modelPicker
                 }
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu")
+                        .font(.caption)
+                        .foregroundColor(Theme.textMuted)
+                    Text(currentModelLabel())
+                        .font(.caption)
+                        .foregroundColor(Theme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Theme.darkSurface)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.darkBorder, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
                 HStack(spacing: 6) {
                     Toggle("", isOn: $chatVM.thinkingEnabled)
@@ -597,6 +612,18 @@ struct ChatView: View {
 
     private func selectedAgentName() -> String {
         agentsVM.agents.first(where: { $0.id == chatVM.selectedAgentId })?.name ?? "Agent"
+    }
+
+    private func currentModelLabel() -> String {
+        if let selectedModelId = chatVM.selectedModelId,
+           let selected = agentsVM.availableModels.first(where: { $0.id == selectedModelId }) {
+            return selected.name
+        }
+        if let agent = agentsVM.agents.first(where: { $0.id == chatVM.currentAgentId }) {
+            if let modelName = agent.modelName, !modelName.isEmpty { return modelName }
+            if let model = agent.model, !model.isEmpty { return model }
+        }
+        return "Agent Default"
     }
 
     private func startProjectPlanningMode() {
