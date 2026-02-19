@@ -215,22 +215,6 @@ struct ChatView: View {
             .frame(width: 180)
             .disabled(chatVM.selectedConversationIsLockedToAgent)
 
-            // Model picker — only shown when conversation is not locked
-            if !chatVM.selectedConversationIsLockedToAgent {
-                modelPicker
-            }
-
-            // Thinking toggle — fixed size label so it never wraps or rotates
-            HStack(spacing: 6) {
-                Toggle("", isOn: $chatVM.thinkingEnabled)
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                Text("Thinking")
-                    .font(.subheadline)
-                    .foregroundColor(Theme.textSecondary)
-                    .fixedSize()
-            }
-
             if chatVM.selectedConversationIsLockedToAgent {
                 Text("Agent fixed — start a new chat to switch")
                     .font(.caption2)
@@ -447,13 +431,6 @@ struct ChatView: View {
             }
 
             HStack(alignment: .bottom, spacing: 8) {
-                Button {
-                    showImporter = true
-                } label: {
-                    Image(systemName: "paperclip")
-                }
-                .buttonStyle(.bordered)
-
                 // Scrollable multi-line composer with Enter-to-send / Shift+Enter for newline
                 ComposerTextView(
                     text: $chatVM.draftMessage,
@@ -490,6 +467,47 @@ struct ChatView: View {
                     )
                     .transition(.scale.combined(with: .opacity))
                 }
+            }
+
+            HStack(spacing: 10) {
+                Menu {
+                    Button {
+                        showImporter = true
+                    } label: {
+                        Label("Add Files", systemImage: "paperclip")
+                    }
+
+                    Button {
+                        startProjectPlanningMode()
+                    } label: {
+                        Label("Start Project Planning", systemImage: "sparkles")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline)
+                }
+                .menuStyle(.borderlessButton)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Theme.darkSurface)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.darkBorder, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                if !chatVM.selectedConversationIsLockedToAgent {
+                    modelPicker
+                }
+
+                HStack(spacing: 6) {
+                    Toggle("", isOn: $chatVM.thinkingEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    Text("Thinking")
+                        .font(.subheadline)
+                        .foregroundColor(Theme.textSecondary)
+                        .fixedSize()
+                }
+
+                Spacer()
             }
         }
         .padding(12)
@@ -579,6 +597,18 @@ struct ChatView: View {
 
     private func selectedAgentName() -> String {
         agentsVM.agents.first(where: { $0.id == chatVM.selectedAgentId })?.name ?? "Agent"
+    }
+
+    private func startProjectPlanningMode() {
+        let jarvis = preferredJarvisId()
+        chatVM.startNewChat(defaultAgentId: jarvis)
+        chatVM.selectedAgentId = jarvis
+        let seed = "[project] "
+        if chatVM.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            chatVM.draftMessage = seed
+        } else if !chatVM.draftMessage.lowercased().contains("[project]") {
+            chatVM.draftMessage = "\(seed)\(chatVM.draftMessage)"
+        }
     }
 
     private func enforceSidebarRules() {
