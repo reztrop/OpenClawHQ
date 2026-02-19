@@ -254,6 +254,7 @@ class AgentsViewModel: ObservableObject {
             activeAvatarPath: activeAvatarPath,
             idleAvatarPath: idleAvatarPath
         )
+        AvatarService.shared.clearCache()
 
         await refreshAgents()
 
@@ -583,6 +584,8 @@ class AgentsViewModel: ObservableObject {
             idleAvatarPath: idleAvatarPath
         )
         AvatarService.shared.clearCache()
+
+        await refreshAgents()
 
         // Update local state immediately
         if let idx = agents.firstIndex(where: { $0.id == agentId }) {
