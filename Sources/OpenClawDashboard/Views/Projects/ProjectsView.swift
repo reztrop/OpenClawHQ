@@ -11,6 +11,7 @@ struct ProjectsView: View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
 
                 if !isSidebarCollapsed {
                     Divider().background(Theme.darkBorder)
