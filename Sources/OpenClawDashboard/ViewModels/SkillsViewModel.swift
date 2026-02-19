@@ -182,6 +182,17 @@ final class SkillsViewModel: ObservableObject {
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
 
+            // macOS app bundles have a stripped PATH that excludes Homebrew.
+            // openclaw.mjs uses `#!/usr/bin/env node`, so we must ensure node
+            // is findable by injecting the full shell PATH.
+            var env = ProcessInfo.processInfo.environment
+            let extraPaths = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+            let currentPath = env["PATH"] ?? ""
+            let pathComponents = currentPath.split(separator: ":").map(String.init)
+            let merged = extraPaths.filter { !pathComponents.contains($0) } + pathComponents
+            env["PATH"] = merged.joined(separator: ":")
+            process.environment = env
+
             let stdout = Pipe()
             let stderr = Pipe()
             process.standardOutput = stdout
