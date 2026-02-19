@@ -340,11 +340,20 @@ class ChatViewModel: ObservableObject {
         } catch {
             streamingText = nil
             activeRunSessionKey = nil
-            messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: "Error: \(error.localizedDescription)", createdAt: Date()))
+            messages.append(ChatMessage(id: UUID().uuidString, role: "assistant", text: userFacingSendError(error), createdAt: Date()))
         }
 
         pendingAttachments = []
         isSending = false
+    }
+
+    private func userFacingSendError(_ error: Error) -> String {
+        let raw = error.localizedDescription
+        let lower = raw.lowercased()
+        if lower.contains("unknown model") || lower.contains("model specified without provider") {
+            return "Error: This agent's model is misconfigured. Set the model to a provider-qualified value such as openai-codex/gpt-5.3-codex in Agents settings."
+        }
+        return "Error: \(raw)"
     }
 
     var selectedConversationIsLockedToAgent: Bool {

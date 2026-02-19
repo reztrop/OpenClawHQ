@@ -14,6 +14,7 @@ struct Agent: Identifiable, Hashable {
     var model: String?          // model ID from gateway (e.g. "anthropic/claude-sonnet-4-5")
     var modelName: String?      // human-friendly model name
     var isDefaultAgent: Bool    // true if this is the main/default agent (cannot be deleted)
+    var isInitialized: Bool = true
 
     var brandColor: Color {
         Theme.agentColor(for: name)

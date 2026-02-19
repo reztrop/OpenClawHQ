@@ -45,6 +45,16 @@ struct AgentCard: View {
                     ModelBadge(modelName: modelName)
                 }
 
+                if !agent.isInitialized {
+                    Text("Not initialized")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.12))
+                        .clipShape(Capsule())
+                }
+
                 // Activity or stats
                 if let activity = agent.currentActivity {
                     Text(activity)

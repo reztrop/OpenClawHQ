@@ -56,13 +56,16 @@ class AgentsViewModel: ObservableObject {
                 let ident = raw["identity"] as? [String: Any]
                 let gatewayName = (ident?["name"]  as? String) ?? (raw["name"]  as? String) ?? id
                 let gatewayEmoji = (ident?["emoji"] as? String) ?? "🤖"
-                let gatewayModelId = (ident?["model"] as? String) ?? (raw["model"] as? String)
+                let gatewayModelId = ModelNormalizer.normalize((ident?["model"] as? String) ?? (raw["model"] as? String))
                 let localConfig = settingsService.settings.localAgents.first(where: { $0.id == id })
                 let localName = localConfig?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let rawName = (localName?.isEmpty == false ? (localName ?? gatewayName) : gatewayName)
                 let localEmoji = localConfig?.emoji
                 let emoji = (localEmoji?.isEmpty == false ? (localEmoji ?? gatewayEmoji) : gatewayEmoji)
-                let modelId = (localConfig?.modelId?.isEmpty == false ? localConfig?.modelId : gatewayModelId)
+                let localModelId = ModelNormalizer.normalize(localConfig?.modelId)
+                let modelId = (localModelId?.isEmpty == false ? localModelId : gatewayModelId)
+                let home = FileManager.default.homeDirectoryForCurrentUser.path
+                let isInitialized = FileManager.default.fileExists(atPath: "\(home)/.openclaw/agents/\(id.lowercased())/agent")
 
                 // Preserve existing agent's runtime state if already known
                 if let existing = agents.first(where: { $0.id == id }) {
@@ -72,6 +75,7 @@ class AgentsViewModel: ObservableObject {
                     updated.model          = modelId
                     updated.modelName      = modelId
                     updated.isDefaultAgent = id == defaultId
+                    updated.isInitialized  = isInitialized
                     return updated
                 }
 
@@ -85,7 +89,8 @@ class AgentsViewModel: ObservableObject {
                     sessionCount: 0,
                     model: modelId,
                     modelName: modelId,
-                    isDefaultAgent: id == defaultId
+                    isDefaultAgent: id == defaultId,
+                    isInitialized: isInitialized
                 )
             }
 
@@ -207,9 +212,10 @@ class AgentsViewModel: ObservableObject {
 
         // Set model if provided
         if let model = model, !model.isEmpty {
-            _ = try? await gatewayService.updateAgent(agentId: agentId, model: model)
+            let normalizedModel = ModelNormalizer.normalize(model)
+            _ = try? await gatewayService.updateAgent(agentId: agentId, model: normalizedModel)
             saveLocalAgentOverride(agentId: agentId) { config in
-                config.modelId = model
+                config.modelId = normalizedModel
             }
         }
 
@@ -414,10 +420,11 @@ class AgentsViewModel: ObservableObject {
     func updateAgent(agentId: String, name: String? = nil, emoji: String? = nil, model: String? = nil, identityContent: String? = nil) async throws {
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = (trimmedName?.isEmpty == true) ? nil : trimmedName
-        let shouldSendGatewayUpdate = finalName != nil || model != nil
+        let normalizedModel = ModelNormalizer.normalize(model)
+        let shouldSendGatewayUpdate = finalName != nil || normalizedModel != nil
 
         if shouldSendGatewayUpdate {
-            _ = try await gatewayService.updateAgent(agentId: agentId, name: finalName, model: model)
+            _ = try await gatewayService.updateAgent(agentId: agentId, name: finalName, model: normalizedModel)
         }
 
         if let identity = identityContent {
@@ -430,7 +437,7 @@ class AgentsViewModel: ObservableObject {
             }
         }
 
-        if let model = model, !model.isEmpty {
+        if let model = normalizedModel, !model.isEmpty {
             saveLocalAgentOverride(agentId: agentId) { config in
                 config.modelId = model
             }
@@ -440,7 +447,7 @@ class AgentsViewModel: ObservableObject {
         if let idx = agents.firstIndex(where: { $0.id == agentId }) {
             if let name = finalName { agents[idx].name = name }
             if let emoji = emoji { agents[idx].emoji = emoji }
-            if let model = model {
+            if let model = normalizedModel {
                 agents[idx].model = model
                 agents[idx].modelName = availableModels.first(where: { $0.id == model })?.name
             }
