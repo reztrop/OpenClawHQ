@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 @MainActor
 class TasksViewModel: ObservableObject {
@@ -7,9 +8,19 @@ class TasksViewModel: ObservableObject {
     @Published var showingNewTask = false
 
     private let taskService: TaskService
+    private var cancellables = Set<AnyCancellable>()
 
     init(taskService: TaskService) {
         self.taskService = taskService
+        taskService.$tasks
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+
+        taskService.$isExecutionPaused
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     var tasks: [TaskItem] {
@@ -24,6 +35,15 @@ class TasksViewModel: ObservableObject {
         tasksFor(status).count
     }
 
+    var isExecutionPaused: Bool {
+        taskService.isExecutionPaused
+    }
+
+    func toggleExecutionPaused() {
+        taskService.toggleExecutionPaused()
+        objectWillChange.send()
+    }
+
     // MARK: - CRUD
 
     func createTask(
@@ -31,7 +51,10 @@ class TasksViewModel: ObservableObject {
         description: String?,
         assignedAgent: String?,
         priority: TaskPriority,
-        scheduledFor: Date?
+        scheduledFor: Date?,
+        projectId: String? = nil,
+        projectName: String? = nil,
+        projectColorHex: String? = nil
     ) {
         _ = taskService.createTask(
             title: title,
@@ -39,7 +62,10 @@ class TasksViewModel: ObservableObject {
             assignedAgent: assignedAgent,
             status: .scheduled,
             priority: priority,
-            scheduledFor: scheduledFor
+            scheduledFor: scheduledFor,
+            projectId: projectId,
+            projectName: projectName,
+            projectColorHex: projectColorHex
         )
         objectWillChange.send()
     }

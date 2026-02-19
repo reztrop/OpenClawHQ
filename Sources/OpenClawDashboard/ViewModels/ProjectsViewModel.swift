@@ -9,10 +9,12 @@ class ProjectsViewModel: ObservableObject {
 
     private let filePath: String
     private let gatewayService: GatewayService
+    private let taskService: TaskService
     private var pendingPlanningByConversation: [String: PendingProjectPlanning] = [:]
 
-    init(gatewayService: GatewayService, filePath: String = Constants.projectsFilePath) {
+    init(gatewayService: GatewayService, taskService: TaskService, filePath: String = Constants.projectsFilePath) {
         self.gatewayService = gatewayService
+        self.taskService = taskService
         self.filePath = filePath
         load()
     }
@@ -319,6 +321,65 @@ class ProjectsViewModel: ObservableObject {
         """
     }
 
+    func executeCurrentProjectPlan() async {
+        guard let project = selectedProject else { return }
+        guard !taskService.isExecutionPaused else {
+            statusMessage = "Execution is paused. Resume task activity on the Tasks page first."
+            return
+        }
+
+        let projectColorHex = colorHex(forProjectId: project.id)
+        let projectName = project.title
+
+        let seedTasks: [(String, String, String, TaskPriority)] = [
+            ("Finalize execution orchestration", "Jarvis coordinates delivery sequencing and ownership checkpoints for this project.", "Jarvis", .urgent),
+            ("Translate approved plan into implementation tasks", "Break the approved project plan into execution-ready work items and acceptance criteria.", "Scope", .high),
+            ("Research external dependencies and constraints", "Validate APIs, libraries, and integration constraints before implementation.", "Atlas", .medium),
+            ("Implement core product workflows", "Build the primary flows specified by the approved sections and design plan.", "Matrix", .high),
+            ("Define QA gates and validate readiness", "Set validation criteria and verify key paths before release.", "Prism", .high),
+        ]
+
+        var created = 0
+        for seed in seedTasks {
+            let scopedTitle = "\(projectName): \(seed.0)"
+            let alreadyExists = taskService.tasks.contains {
+                $0.projectId == project.id && $0.title == scopedTitle
+            }
+            if alreadyExists { continue }
+
+            _ = taskService.createTask(
+                title: scopedTitle,
+                description: seed.1,
+                assignedAgent: seed.2,
+                status: .scheduled,
+                priority: seed.3,
+                scheduledFor: nil,
+                projectId: project.id,
+                projectName: projectName,
+                projectColorHex: projectColorHex
+            )
+            created += 1
+        }
+
+        // Kick off execution orchestration in Jarvis session as a background instruction.
+        let kickoffMessage = """
+        [project-execute]
+        Project: \(projectName)
+        Start execution now. Create and coordinate concrete task updates through the team.
+        Prioritize urgent and high-priority work first.
+        """
+        _ = try? await gatewayService.sendAgentMessage(
+            agentId: "jarvis",
+            message: kickoffMessage,
+            sessionKey: project.conversationId,
+            thinkingEnabled: true
+        )
+
+        statusMessage = created == 0
+            ? "Execution already initialized for this project."
+            : "Execution started. Created \(created) task(s) in Ready."
+    }
+
     private func applyDraft(_ text: String, for stage: ProductStage, to project: inout ProjectRecord) {
         switch stage {
         case .dataModel:
@@ -409,6 +470,12 @@ class ProjectsViewModel: ObservableObject {
         if cleaned.isEmpty { return "New Project" }
         if cleaned.count <= 54 { return cleaned }
         return String(cleaned.prefix(54)).trimmingCharacters(in: .whitespacesAndNewlines) + "..."
+    }
+
+    private func colorHex(forProjectId projectId: String) -> String {
+        let palette = ["#3B82F6", "#22C55E", "#F59E0B", "#06B6D4", "#A855F7", "#EF4444", "#F97316", "#14B8A6"]
+        let hash = abs(projectId.hashValue)
+        return palette[hash % palette.count]
     }
 
     private func saveUpdated(_ project: ProjectRecord) {

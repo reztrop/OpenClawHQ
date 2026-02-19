@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskCard: View {
     let task: TaskItem
+    let onView: (() -> Void)?
     @State private var isHovered = false
 
     var body: some View {
@@ -22,6 +23,17 @@ struct TaskCard: View {
                         .font(.caption2)
                         .foregroundColor(Theme.textMuted)
                 }
+                if let onView {
+                    Button {
+                        onView()
+                    } label: {
+                        Image(systemName: "eye")
+                            .font(.caption)
+                            .foregroundColor(Theme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .help("View task details")
+                }
             }
 
             // Title
@@ -41,6 +53,15 @@ struct TaskCard: View {
 
             // Footer: Agent + time
             HStack(spacing: 6) {
+                if let projectName = task.projectName, !projectName.isEmpty {
+                    Text(projectName)
+                        .font(.caption2)
+                        .foregroundColor(Color(hex: task.projectColorHex ?? "#9CA3AF"))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color(hex: task.projectColorHex ?? "#9CA3AF").opacity(0.12))
+                        .clipShape(Capsule())
+                }
                 if let agentName = task.assignedAgent {
                     AgentAvatarSmall(agentName: agentName, size: 20)
                     Text(agentName)

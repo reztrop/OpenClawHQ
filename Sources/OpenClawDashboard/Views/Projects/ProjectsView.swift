@@ -395,13 +395,15 @@ struct ProjectsView: View {
             HStack(spacing: 10) {
                 Button("Save") { projectsVM.save() }
                     .buttonStyle(.bordered)
-                Button("Copy Markdown") {
-                    let pb = NSPasteboard.general
-                    pb.clearContents()
-                    pb.setString(markdown, forType: .string)
-                    projectsVM.statusMessage = "Export copied to clipboard."
+                Button("Save As") {
+                    saveExportAs(projectName: project.title, markdown: markdown)
                 }
                 .buttonStyle(.borderedProminent)
+                Button("Execute") {
+                    Task { await projectsVM.executeCurrentProjectPlan() }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(projectsVM.isApproving)
             }
         }
         .padding(16)
@@ -455,6 +457,22 @@ struct ProjectsView: View {
             }
         } else if appViewModel.isMainSidebarCollapsed {
             appViewModel.isMainSidebarCollapsed = false
+        }
+    }
+
+    private func saveExportAs(projectName: String, markdown: String) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = "\(projectName.replacingOccurrences(of: " ", with: "_"))-plan.md"
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try markdown.write(to: url, atomically: true, encoding: .utf8)
+                projectsVM.statusMessage = "Saved project plan to \(url.path)."
+            } catch {
+                projectsVM.statusMessage = "Failed to save file: \(error.localizedDescription)"
+            }
         }
     }
 }

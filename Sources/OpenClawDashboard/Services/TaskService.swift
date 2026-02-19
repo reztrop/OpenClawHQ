@@ -4,12 +4,20 @@ import Foundation
 @MainActor
 class TaskService: ObservableObject {
     @Published var tasks: [TaskItem] = []
+    @Published var isExecutionPaused: Bool = false
 
     private let filePath: String
+    private let stateFilePath: String
 
-    init(filePath: String = Constants.tasksFilePath) {
+    private struct TaskRuntimeState: Codable {
+        var isExecutionPaused: Bool
+    }
+
+    init(filePath: String = Constants.tasksFilePath, stateFilePath: String = Constants.tasksStateFilePath) {
         self.filePath = filePath
+        self.stateFilePath = stateFilePath
         loadTasks()
+        loadRuntimeState()
     }
 
     // MARK: - Persistence
@@ -44,6 +52,43 @@ class TaskService: ObservableObject {
         }
     }
 
+    private func loadRuntimeState() {
+        guard FileManager.default.fileExists(atPath: stateFilePath) else {
+            isExecutionPaused = false
+            saveRuntimeState()
+            return
+        }
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: stateFilePath))
+            let decoder = JSONDecoder()
+            let state = try decoder.decode(TaskRuntimeState.self, from: data)
+            isExecutionPaused = state.isExecutionPaused
+        } catch {
+            isExecutionPaused = false
+        }
+    }
+
+    private func saveRuntimeState() {
+        do {
+            let state = TaskRuntimeState(isExecutionPaused: isExecutionPaused)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(state)
+            try data.write(to: URL(fileURLWithPath: stateFilePath), options: .atomic)
+        } catch {
+            print("[TaskService] Failed to save runtime state: \(error)")
+        }
+    }
+
+    func setExecutionPaused(_ paused: Bool) {
+        isExecutionPaused = paused
+        saveRuntimeState()
+    }
+
+    func toggleExecutionPaused() {
+        setExecutionPaused(!isExecutionPaused)
+    }
+
     // MARK: - CRUD
 
     func createTask(
@@ -52,7 +97,10 @@ class TaskService: ObservableObject {
         assignedAgent: String? = nil,
         status: TaskStatus = .scheduled,
         priority: TaskPriority = .medium,
-        scheduledFor: Date? = nil
+        scheduledFor: Date? = nil,
+        projectId: String? = nil,
+        projectName: String? = nil,
+        projectColorHex: String? = nil
     ) -> TaskItem {
         let task = TaskItem(
             title: title,
@@ -60,7 +108,10 @@ class TaskService: ObservableObject {
             assignedAgent: assignedAgent,
             status: status,
             priority: priority,
-            scheduledFor: scheduledFor
+            scheduledFor: scheduledFor,
+            projectId: projectId,
+            projectName: projectName,
+            projectColorHex: projectColorHex
         )
         tasks.append(task)
         saveTasks()
@@ -93,7 +144,24 @@ class TaskService: ObservableObject {
     }
 
     func tasksForStatus(_ status: TaskStatus) -> [TaskItem] {
-        tasks.filter { $0.status == status }
+        tasks
+            .filter { $0.status == status }
+            .sorted {
+                let lhsPriority = Self.priorityRank($0.priority)
+                let rhsPriority = Self.priorityRank($1.priority)
+                if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
+                if $0.updatedAt != $1.updatedAt { return $0.updatedAt > $1.updatedAt }
+                return $0.createdAt > $1.createdAt
+            }
+    }
+
+    private static func priorityRank(_ priority: TaskPriority) -> Int {
+        switch priority {
+        case .urgent: return 0
+        case .high: return 1
+        case .medium: return 2
+        case .low: return 3
+        }
     }
 
     // MARK: - Sample Data

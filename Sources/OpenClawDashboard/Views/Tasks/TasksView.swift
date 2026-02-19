@@ -3,6 +3,7 @@ import SwiftUI
 struct TasksView: View {
     @EnvironmentObject var tasksVM: TasksViewModel
     @EnvironmentObject var gatewayService: GatewayService
+    @State private var selectedTaskForView: TaskItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,6 +20,9 @@ struct TasksView: View {
                         },
                         onMove: { taskId, targetStatus in
                             tasksVM.moveTask(taskId, to: targetStatus)
+                        },
+                        onView: { task in
+                            selectedTaskForView = task
                         },
                         onEdit: { task in
                             tasksVM.startEditing(task)
@@ -39,6 +43,15 @@ struct TasksView: View {
                 } label: {
                     Label("New Task", systemImage: "plus")
                 }
+            }
+            ToolbarItem(placement: .automatic) {
+                Button {
+                    tasksVM.toggleExecutionPaused()
+                } label: {
+                    Label(tasksVM.isExecutionPaused ? "Resume" : "Pause",
+                          systemImage: tasksVM.isExecutionPaused ? "play.fill" : "pause.fill")
+                }
+                .help(tasksVM.isExecutionPaused ? "Resume all task activity" : "Pause all task activity")
             }
         }
         .sheet(isPresented: $tasksVM.showingNewTask) {
@@ -64,6 +77,9 @@ struct TasksView: View {
                     tasksVM.updateTask(updated)
                 }
             }
+        }
+        .sheet(item: $selectedTaskForView) { task in
+            TaskDetailSheet(task: task)
         }
     }
 }

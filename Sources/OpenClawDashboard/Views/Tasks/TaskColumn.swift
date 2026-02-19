@@ -5,6 +5,7 @@ struct TaskColumn: View {
     let tasks: [TaskItem]
     let onDrop: ([TaskItem]) -> Bool
     let onMove: (UUID, TaskStatus) -> Void
+    let onView: (TaskItem) -> Void
     let onEdit: (TaskItem) -> Void
     let onDelete: (UUID) -> Void
 
@@ -41,7 +42,7 @@ struct TaskColumn: View {
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(tasks) { task in
-                        TaskCard(task: task)
+                        TaskCard(task: task, onView: { onView(task) })
                             .draggable(task)
                             .contextMenu {
                                 Button("Edit") { onEdit(task) }

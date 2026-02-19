@@ -12,6 +12,9 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
     var updatedAt: Date
     var scheduledFor: Date?
     var completedAt: Date?
+    var projectId: String?
+    var projectName: String?
+    var projectColorHex: String?
 
     init(
         id: UUID = UUID(),
@@ -23,7 +26,10 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         scheduledFor: Date? = nil,
-        completedAt: Date? = nil
+        completedAt: Date? = nil,
+        projectId: String? = nil,
+        projectName: String? = nil,
+        projectColorHex: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -35,11 +41,47 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
         self.updatedAt = updatedAt
         self.scheduledFor = scheduledFor
         self.completedAt = completedAt
+        self.projectId = projectId
+        self.projectName = projectName
+        self.projectColorHex = projectColorHex
     }
 
     // MARK: - Transferable
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .data)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case description
+        case assignedAgent
+        case status
+        case priority
+        case createdAt
+        case updatedAt
+        case scheduledFor
+        case completedAt
+        case projectId
+        case projectName
+        case projectColorHex
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        assignedAgent = try c.decodeIfPresent(String.self, forKey: .assignedAgent)
+        status = try c.decodeIfPresent(TaskStatus.self, forKey: .status) ?? .scheduled
+        priority = try c.decodeIfPresent(TaskPriority.self, forKey: .priority) ?? .medium
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+        scheduledFor = try c.decodeIfPresent(Date.self, forKey: .scheduledFor)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        projectId = try c.decodeIfPresent(String.self, forKey: .projectId)
+        projectName = try c.decodeIfPresent(String.self, forKey: .projectName)
+        projectColorHex = try c.decodeIfPresent(String.self, forKey: .projectColorHex)
     }
 }
 
@@ -52,7 +94,7 @@ enum TaskStatus: String, Codable, CaseIterable {
 
     var columnTitle: String {
         switch self {
-        case .scheduled: return "Scheduled"
+        case .scheduled: return "Ready"
         case .queued: return "Queue"
         case .inProgress: return "In Progress"
         case .done: return "Done"
