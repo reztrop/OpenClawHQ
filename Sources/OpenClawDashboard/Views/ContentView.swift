@@ -80,6 +80,9 @@ struct ContentView: View {
             Text("Agent Dashboard")
                 .font(.caption)
                 .foregroundColor(Theme.textMuted)
+            Text("Built by Andrew Portzer")
+                .font(.caption2)
+                .foregroundColor(Theme.textMuted.opacity(0.85))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
