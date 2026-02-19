@@ -69,12 +69,18 @@ class AgentsViewModel: ObservableObject {
                 let canCommunicateWithAgents = localConfig?.canCommunicateWithAgents ?? true
                 let home = FileManager.default.homeDirectoryForCurrentUser.path
                 let isInitialized = FileManager.default.fileExists(atPath: "\(home)/.openclaw/agents/\(id.lowercased())/agent")
+                let roleTitle = resolveRoleTitle(
+                    agentId: id,
+                    agentName: rawName.isEmpty ? id : rawName,
+                    isDefaultAgent: id == defaultId
+                )
 
                 // Preserve existing agent's runtime state if already known
                 if let existing = agents.first(where: { $0.id == id }) {
                     var updated = existing
                     updated.name           = rawName.isEmpty ? id : rawName
                     updated.emoji          = emoji
+                    updated.role           = roleTitle
                     updated.model          = modelId
                     updated.modelName      = modelId
                     updated.isDefaultAgent = id == defaultId
@@ -87,7 +93,7 @@ class AgentsViewModel: ObservableObject {
                     id: id,
                     name: rawName.isEmpty ? id : rawName,
                     emoji: emoji,
-                    role: id == defaultId ? "Main Agent" : "Agent",
+                    role: roleTitle,
                     status: gatewayService.isConnected ? .idle : .offline,
                     totalTokens: 0,
                     sessionCount: 0,
@@ -300,11 +306,12 @@ class AgentsViewModel: ObservableObject {
 
         Handling requirements (must complete in order):
         1) Confirm the agent exists and all expected files are present:
-           IDENTITY.md, SOUL.md, USER.md, TOOLS.md, AGENTS.md, BOOTSTRAP.md, MEMORY.md, HEARTBEAT.md
+           IDENTITY.md, SOUL.md, USER.md, TOOLS.md, AGENTS.md, BOOTSTRAP.md, MEMORY.md, HEARTBEAT.md, TITLE.md
         2) Use the natural language provided below to ensure IDENTITY.md and SOUL.md are implemented accordingly.
-        3) Verify each file is set and usable.
-        4) If Boot on Start is YES, initialize the new agent and confirm it can accept work now.
-        5) Return a concise verification summary with pass/fail per file and readiness status.
+        3) Assign this new hire a concise job title and write it to TITLE.md (single line).
+        4) Verify each file is set and usable.
+        5) If Boot on Start is YES, initialize the new agent and confirm it can accept work now.
+        6) Return a concise verification summary with pass/fail per file and readiness status.
 
         IDENTITY INPUT:
         \(identityText.isEmpty ? "(none supplied)" : identityText)
@@ -561,6 +568,10 @@ class AgentsViewModel: ObservableObject {
         """
         _ = try? await gatewayService.setAgentFile(agentId: agentId, name: "TOOLS.md", content: toolsFile)
 
+        // TITLE.md
+        let titleFile = "\(defaultTitleForAgent(name: name))\n"
+        _ = try? await gatewayService.setAgentFile(agentId: agentId, name: "TITLE.md", content: titleFile)
+
         // MEMORY.md
         let memoryFile = """
         # MEMORY.md
@@ -707,7 +718,7 @@ class AgentsViewModel: ObservableObject {
         let fm = FileManager.default
         let expected = [
             "IDENTITY.md", "SOUL.md", "USER.md", "TOOLS.md",
-            "AGENTS.md", "BOOTSTRAP.md", "MEMORY.md", "HEARTBEAT.md"
+            "AGENTS.md", "BOOTSTRAP.md", "MEMORY.md", "HEARTBEAT.md", "TITLE.md"
         ]
 
         let fallbackIdentity = """
@@ -732,7 +743,8 @@ class AgentsViewModel: ObservableObject {
             "AGENTS.md": "# AGENTS.md\n",
             "BOOTSTRAP.md": "# BOOTSTRAP.md\n",
             "MEMORY.md": "# MEMORY.md\n",
-            "HEARTBEAT.md": "# HEARTBEAT.md\n"
+            "HEARTBEAT.md": "# HEARTBEAT.md\n",
+            "TITLE.md": "\(defaultTitleForAgent(name: name))\n"
         ]
 
         for file in expected {
@@ -770,6 +782,43 @@ class AgentsViewModel: ObservableObject {
                 throw NSError(domain: "OpenClawHQ", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: "CLI warmup failed"])
             }
         }.value
+    }
+
+    private func resolveRoleTitle(agentId: String, agentName: String, isDefaultAgent: Bool) -> String {
+        if let workspaceTitle = readTitleFromWorkspace(agentId: agentId), !workspaceTitle.isEmpty {
+            return workspaceTitle
+        }
+        if isDefaultAgent {
+            return "Chief Orchestrator"
+        }
+        let themed = Theme.agentRole(for: agentName)
+        if themed != "Agent" {
+            return themed
+        }
+        return defaultTitleForAgent(name: agentName)
+    }
+
+    private func readTitleFromWorkspace(agentId: String) -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = "\(home)/.openclaw/workspace/agents/\(agentId.lowercased())/TITLE.md"
+        guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return nil
+        }
+        return raw
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first(where: { !$0.isEmpty })
+    }
+
+    private func defaultTitleForAgent(name: String) -> String {
+        switch name.lowercased() {
+        case "jarvis": return "Chief Orchestrator"
+        case "atlas": return "Research Strategist"
+        case "matrix": return "Lead Engineer"
+        case "prism": return "Quality and Risk Analyst"
+        case "scope": return "Program Architect"
+        default: return "Specialist Agent"
+        }
     }
 
     private func saveLocalAgentOverride(agentId: String, update: (inout LocalAgentConfig) -> Void) {
