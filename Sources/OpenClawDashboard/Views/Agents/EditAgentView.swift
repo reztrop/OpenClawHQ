@@ -8,6 +8,7 @@ struct EditAgentView: View {
     @EnvironmentObject var gatewayService: GatewayService
 
     @State private var agentName: String
+    @State private var agentTitle: String
     @State private var agentEmoji: String
     @State private var selectedModelId: String?
     @State private var canCommunicateWithAgents: Bool
@@ -24,6 +25,7 @@ struct EditAgentView: View {
     init(agent: Agent) {
         self.agent = agent
         _agentName = State(initialValue: agent.name)
+        _agentTitle = State(initialValue: agent.role)
         _agentEmoji = State(initialValue: agent.emoji)
         _selectedModelId = State(initialValue: agent.model)
         _canCommunicateWithAgents = State(initialValue: agent.canCommunicateWithAgents)
@@ -91,6 +93,12 @@ struct EditAgentView: View {
                                 .frame(width: 60)
                                 .focused($isEmojiFieldFocused)
                         }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Title").font(.caption).foregroundColor(Theme.textMuted)
+                        TextField("e.g. The Architect", text: $agentTitle)
+                            .textFieldStyle(.roundedBorder)
                     }
 
                     // Emoji quick pick
@@ -183,6 +191,7 @@ struct EditAgentView: View {
             try await agentsVM.updateAgent(
                 agentId: agent.id,
                 name: agentName.trimmingCharacters(in: .whitespaces),
+                title: agentTitle.trimmingCharacters(in: .whitespacesAndNewlines),
                 emoji: agentEmoji,
                 model: selectedModelId,
                 identityContent: identityContent.isEmpty ? nil : identityContent,

@@ -4,6 +4,7 @@ import Foundation
 struct LocalAgentConfig: Codable, Identifiable {
     var id: String           // agentId
     var displayName: String? = nil
+    var title: String? = nil
     var emoji: String? = nil
     var modelId: String? = nil
     var canCommunicateWithAgents: Bool = true
@@ -13,6 +14,7 @@ struct LocalAgentConfig: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case displayName
+        case title
         case emoji
         case modelId
         case canCommunicateWithAgents
@@ -23,6 +25,7 @@ struct LocalAgentConfig: Codable, Identifiable {
     init(
         id: String,
         displayName: String? = nil,
+        title: String? = nil,
         emoji: String? = nil,
         modelId: String? = nil,
         canCommunicateWithAgents: Bool = true,
@@ -31,6 +34,7 @@ struct LocalAgentConfig: Codable, Identifiable {
     ) {
         self.id = id
         self.displayName = displayName
+        self.title = title
         self.emoji = emoji
         self.modelId = modelId
         self.canCommunicateWithAgents = canCommunicateWithAgents
@@ -42,6 +46,7 @@ struct LocalAgentConfig: Codable, Identifiable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         displayName = try c.decodeIfPresent(String.self, forKey: .displayName)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
         emoji = try c.decodeIfPresent(String.self, forKey: .emoji)
         modelId = try c.decodeIfPresent(String.self, forKey: .modelId)
         canCommunicateWithAgents = try c.decodeIfPresent(Bool.self, forKey: .canCommunicateWithAgents) ?? true

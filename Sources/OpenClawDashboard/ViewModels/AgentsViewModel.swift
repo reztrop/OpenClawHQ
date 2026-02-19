@@ -61,6 +61,7 @@ class AgentsViewModel: ObservableObject {
                 let gatewayModelId = ModelNormalizer.normalize((ident?["model"] as? String) ?? (raw["model"] as? String))
                 let localConfig = settingsService.settings.localAgents.first(where: { $0.id == id })
                 let localName = localConfig?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let localTitle = localConfig?.title?.trimmingCharacters(in: .whitespacesAndNewlines)
                 let rawName = (localName?.isEmpty == false ? (localName ?? gatewayName) : gatewayName)
                 let localEmoji = localConfig?.emoji
                 let emoji = (localEmoji?.isEmpty == false ? (localEmoji ?? gatewayEmoji) : gatewayEmoji)
@@ -72,7 +73,8 @@ class AgentsViewModel: ObservableObject {
                 let roleTitle = resolveRoleTitle(
                     agentId: id,
                     agentName: rawName.isEmpty ? id : rawName,
-                    isDefaultAgent: id == defaultId
+                    isDefaultAgent: id == defaultId,
+                    localTitle: localTitle
                 )
 
                 // Preserve existing agent's runtime state if already known
@@ -601,6 +603,7 @@ class AgentsViewModel: ObservableObject {
     func updateAgent(
         agentId: String,
         name: String? = nil,
+        title: String? = nil,
         emoji: String? = nil,
         model: String? = nil,
         identityContent: String? = nil,
@@ -610,6 +613,8 @@ class AgentsViewModel: ObservableObject {
     ) async throws {
         let trimmedName = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let finalName = (trimmedName?.isEmpty == true) ? nil : trimmedName
+        let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalTitle = (trimmedTitle?.isEmpty == true) ? nil : trimmedTitle
         let normalizedModel = ModelNormalizer.normalize(model)
         let shouldSendGatewayUpdate = finalName != nil || normalizedModel != nil
 
@@ -619,6 +624,12 @@ class AgentsViewModel: ObservableObject {
 
         if let identity = identityContent {
             _ = try? await gatewayService.setAgentFile(agentId: agentId, name: "IDENTITY.md", content: identity)
+        }
+        if let finalTitle {
+            _ = try? await gatewayService.setAgentFile(agentId: agentId, name: "TITLE.md", content: "\(finalTitle)\n")
+            saveLocalAgentOverride(agentId: agentId) { config in
+                config.title = finalTitle
+            }
         }
 
         if let emoji = emoji {
@@ -656,6 +667,7 @@ class AgentsViewModel: ObservableObject {
         // Update local state immediately
         if let idx = agents.firstIndex(where: { $0.id == agentId }) {
             if let name = finalName { agents[idx].name = name }
+            if let finalTitle { agents[idx].role = finalTitle }
             if let emoji = emoji { agents[idx].emoji = emoji }
             if let model = normalizedModel {
                 agents[idx].model = model
@@ -790,7 +802,11 @@ class AgentsViewModel: ObservableObject {
         }.value
     }
 
-    private func resolveRoleTitle(agentId: String, agentName: String, isDefaultAgent: Bool) -> String {
+    private func resolveRoleTitle(agentId: String, agentName: String, isDefaultAgent: Bool, localTitle: String?) -> String {
+        if let localTitle, !localTitle.isEmpty,
+           localTitle.lowercased() != "specialist agent" && localTitle.lowercased() != "the specialist" {
+            return localTitle
+        }
         if let workspaceTitle = readTitleFromWorkspace(agentId: agentId), !workspaceTitle.isEmpty,
            workspaceTitle.lowercased() != "specialist agent" && workspaceTitle.lowercased() != "the specialist" {
             return workspaceTitle
