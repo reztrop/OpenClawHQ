@@ -73,6 +73,7 @@ class ChatViewModel: ObservableObject {
     private var activeRunSessionKey: String? = nil
     /// The Task wrapping the current sendAgentMessage call — cancelled by stopCurrentRun().
     private var sendTask: Task<Void, Never>? = nil
+    var onProjectKickoff: ((String, String) -> Void)?
 
     private var uploadsDir: String {
         NSString(string: "~/.openclaw/workspace/uploads/chat").expandingTildeInPath
@@ -293,6 +294,8 @@ class ChatViewModel: ObservableObject {
             }
             return selectedAgentId
         }()
+        let shouldCreateProject = outboundAgentId.lowercased() == "jarvis"
+            && trimmed.lowercased().contains("[project]")
 
         // Set the session key so streaming events are filtered to this conversation.
         // For new chats it will be nil until the gateway returns the actual key.
@@ -310,7 +313,8 @@ class ChatViewModel: ObservableObject {
             await performSend(
                 agentId: outboundAgentId,
                 message: finalMessage,
-                userVisibleText: userVisibleText
+                userVisibleText: userVisibleText,
+                shouldCreateProject: shouldCreateProject
             )
         }
         sendTask = task
@@ -325,7 +329,7 @@ class ChatViewModel: ObservableObject {
         sendTask = nil
     }
 
-    private func performSend(agentId: String, message: String, userVisibleText: String) async {
+    private func performSend(agentId: String, message: String, userVisibleText: String, shouldCreateProject: Bool) async {
         let outboundSessionKey = activeRunSessionKey
 
         do {
@@ -354,6 +358,9 @@ class ChatViewModel: ObservableObject {
                 : finalText
 
             commitResponse(text: assistantText, agentId: agentId, userVisibleText: userVisibleText)
+            if shouldCreateProject, let key = selectedConversationId {
+                onProjectKickoff?(key, userVisibleText)
+            }
 
         } catch where Task.isCancelled || (error as? CancellationError) != nil {
             // User tapped stop — commit whatever streamed so far (may be empty)
