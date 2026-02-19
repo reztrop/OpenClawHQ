@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AppKit
 
 @MainActor
 class AgentsViewModel: ObservableObject {
@@ -605,21 +606,41 @@ class AgentsViewModel: ObservableObject {
         let fm = FileManager.default
         try fm.createDirectory(atPath: Constants.avatarDirectory, withIntermediateDirectories: true, attributes: nil)
 
+        let targetName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !targetName.isEmpty else { return }
+
         func copyAvatar(from sourcePath: String, to destinationPath: String) throws {
             let sourceURL = URL(fileURLWithPath: sourcePath)
             let destinationURL = URL(fileURLWithPath: destinationPath)
+
+            let scoped = sourceURL.startAccessingSecurityScopedResource()
+            defer {
+                if scoped { sourceURL.stopAccessingSecurityScopedResource() }
+            }
+
+            guard let image = NSImage(contentsOf: sourceURL),
+                  let tiffData = image.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiffData),
+                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                throw NSError(
+                    domain: "OpenClawHQ",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Selected avatar is not a valid image file."]
+                )
+            }
+
             if fm.fileExists(atPath: destinationURL.path) {
                 try fm.removeItem(at: destinationURL)
             }
-            try fm.copyItem(at: sourceURL, to: destinationURL)
+            try pngData.write(to: destinationURL)
         }
 
         if let activeAvatarPath, !activeAvatarPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let activeDest = "\(Constants.avatarDirectory)/\(displayName)_active.png"
+            let activeDest = "\(Constants.avatarDirectory)/\(targetName)_active.png"
             try copyAvatar(from: activeAvatarPath, to: activeDest)
         }
         if let idleAvatarPath, !idleAvatarPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let idleDest = "\(Constants.avatarDirectory)/\(displayName)_idle.png"
+            let idleDest = "\(Constants.avatarDirectory)/\(targetName)_idle.png"
             try copyAvatar(from: idleAvatarPath, to: idleDest)
         }
     }
