@@ -211,10 +211,10 @@ struct ChatView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Text("Chat")
-                .font(.title2)
+            Text("TERMINAL_CHAT")
+                .font(.system(.title3, design: .monospaced))
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(Theme.neonCyan)
                 .fixedSize()
 
             // Agent picker
@@ -402,10 +402,14 @@ struct ChatView: View {
                     .font(.caption2)
                     .foregroundColor(Theme.textMuted)
                 Text(message.text)
-                    .font(.body)
-                    .foregroundColor(.white)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundColor(message.isUser ? Theme.textPrimary : Theme.terminalGreen)
                     .padding(12)
-                    .background(message.isUser ? Theme.jarvisBlue.opacity(0.35) : Theme.darkSurface)
+                    .background(message.isUser ? Theme.jarvisBlue.opacity(0.22) : Theme.darkSurface.opacity(0.92))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(message.isUser ? Theme.jarvisBlue.opacity(0.45) : Theme.terminalGreen.opacity(0.25), lineWidth: 1)
+                    )
                     .cornerRadius(12)
                     .textSelection(.enabled)
             }

@@ -20,8 +20,8 @@ struct AgentCard: View {
                 HStack(spacing: 6) {
                     Text(agent.emoji)
                         .font(.title2)
-                    Text(agent.name)
-                        .font(.title3)
+                    Text(agent.name.uppercased())
+                        .font(.system(.title3, design: .monospaced))
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                 }

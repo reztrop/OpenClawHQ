@@ -1,29 +1,40 @@
 import SwiftUI
 
 enum Theme {
-    // MARK: - Backgrounds
-    static let darkBackground = Color(hex: "#0F0F1A")
-    static let darkSurface = Color(hex: "#1A1A2E")
-    static let darkAccent = Color(hex: "#16213E")
-    static let darkBorder = Color(hex: "#2A2A4A")
+    // MARK: - Backgrounds (Lofi Cyberpunk)
+    static let darkBackground = Color(hex: "#090D15")
+    static let darkSurface = Color(hex: "#111827")
+    static let darkAccent = Color(hex: "#141F34")
+    static let darkBorder = Color(hex: "#2A3A56")
+
+    static let terminalGreen = Color(hex: "#95FFB8")
+    static let neonCyan = Color(hex: "#4CF2FF")
+    static let neonMagenta = Color(hex: "#FF5FD2")
+    static let neonLime = Color(hex: "#C5FF6B")
+
+    static let backdropGradient = LinearGradient(
+        colors: [Color(hex: "#070A12"), Color(hex: "#111827"), Color(hex: "#0B1020")],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
 
     // MARK: - Agent Brand Colors
-    static let jarvisBlue = Color(hex: "#3B82F6")
-    static let matrixOrange = Color(hex: "#F97316")
-    static let prismCyan = Color(hex: "#06B6D4")
-    static let scopePurple = Color(hex: "#A855F7")
-    static let atlasAmber = Color(hex: "#F59E0B")
+    static let jarvisBlue = Color(hex: "#4CF2FF")
+    static let matrixOrange = Color(hex: "#FF9A4A")
+    static let prismCyan = Color(hex: "#39E7FF")
+    static let scopePurple = Color(hex: "#BD7CFF")
+    static let atlasAmber = Color(hex: "#FFD36A")
 
     // MARK: - Status Colors
-    static let statusOnline = Color(hex: "#22C55E")
-    static let statusBusy = Color(hex: "#F97316")
-    static let statusIdle = Color(hex: "#6B7280")
-    static let statusOffline = Color(hex: "#EF4444")
+    static let statusOnline = Color(hex: "#4DF5A2")
+    static let statusBusy = Color(hex: "#FFB454")
+    static let statusIdle = Color(hex: "#7C8AA5")
+    static let statusOffline = Color(hex: "#FF5A6A")
 
     // MARK: - Text
-    static let textPrimary = Color.white
-    static let textSecondary = Color(hex: "#9CA3AF")
-    static let textMuted = Color(hex: "#6B7280")
+    static let textPrimary = Color(hex: "#DCE8FF")
+    static let textSecondary = Color(hex: "#A6B7D8")
+    static let textMuted = Color(hex: "#7384A3")
 
     // MARK: - Kanban Column Colors
     static let columnScheduled = Color(hex: "#6366F1")

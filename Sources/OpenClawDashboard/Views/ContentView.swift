@@ -7,7 +7,7 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Theme.darkBackground.ignoresSafeArea()
+            CyberpunkBackdrop()
 
             if appViewModel.showOnboarding {
                 OnboardingView()
@@ -83,12 +83,12 @@ struct ContentView: View {
 
     private var sidebarHeader: some View {
         VStack(spacing: 4) {
-            Text(Constants.appName)
-                .font(.title2)
+            Text("OPENCLAW_HQ")
+                .font(.system(.title3, design: .monospaced))
                 .fontWeight(.bold)
-                .foregroundColor(.white)
-            Text("Agent Dashboard")
-                .font(.caption)
+                .foregroundColor(Theme.neonCyan)
+            Text("LOFI CYBERNET OPS")
+                .font(.system(.caption2, design: .monospaced))
                 .foregroundColor(Theme.textMuted)
             Text("Built by Andrew Portzer")
                 .font(.caption2)

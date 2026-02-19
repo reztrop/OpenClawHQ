@@ -124,7 +124,7 @@ struct ActivityLogView: View {
             // Message
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.message)
-                    .font(.callout)
+                    .font(.system(.callout, design: .monospaced))
                     .foregroundColor(.white)
                     .lineLimit(1)
                 if let details = event.details {

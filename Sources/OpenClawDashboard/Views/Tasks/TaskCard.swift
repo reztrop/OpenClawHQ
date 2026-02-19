@@ -40,7 +40,7 @@ struct TaskCard: View {
 
             // Title
             Text(task.title)
-                .font(.subheadline)
+                .font(.system(.subheadline, design: .monospaced))
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
                 .lineLimit(2)
