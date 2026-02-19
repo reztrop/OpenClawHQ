@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskCard: View {
     let task: TaskItem
     let onView: (() -> Void)?
+    let showPausedOverlay: Bool
     @State private var isHovered = false
 
     var body: some View {
@@ -90,6 +91,21 @@ struct TaskCard: View {
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
+        }
+        .overlay {
+            if showPausedOverlay {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.black.opacity(0.45))
+                    Text("PAUSED")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Theme.statusOffline.opacity(0.8))
+                        .clipShape(Capsule())
+                }
+            }
         }
     }
 }

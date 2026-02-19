@@ -3,6 +3,11 @@ import Combine
 
 @MainActor
 class TasksViewModel: ObservableObject {
+    struct TransitionOutcome {
+        let startedTask: TaskItem?
+        let displacedTask: TaskItem?
+    }
+
     @Published var isEditing = false
     @Published var editingTask: TaskItem?
     @Published var showingNewTask = false
@@ -85,9 +90,30 @@ class TasksViewModel: ObservableObject {
         objectWillChange.send()
     }
 
+    @discardableResult
+    func moveTaskWithExecutionRules(_ taskId: UUID, to status: TaskStatus) -> TransitionOutcome {
+        guard let target = tasks.first(where: { $0.id == taskId }) else {
+            return TransitionOutcome(startedTask: nil, displacedTask: nil)
+        }
+
+        var displaced: TaskItem?
+        if status == .inProgress, let assignee = normalizedAssignee(target.assignedAgent) {
+            if let existing = tasks.first(where: { $0.id != target.id && $0.status == .inProgress && normalizedAssignee($0.assignedAgent) == assignee }) {
+                taskService.moveTask(existing.id, to: .queued)
+                displaced = taskService.tasks.first(where: { $0.id == existing.id })
+            }
+        }
+
+        taskService.moveTask(taskId, to: status)
+        objectWillChange.send()
+
+        let started = status == .inProgress ? taskService.tasks.first(where: { $0.id == taskId }) : nil
+        return TransitionOutcome(startedTask: started, displacedTask: displaced)
+    }
+
     func handleDrop(of tasks: [TaskItem], to status: TaskStatus) -> Bool {
         for task in tasks {
-            moveTask(task.id, to: status)
+            _ = moveTaskWithExecutionRules(task.id, to: status)
         }
         return !tasks.isEmpty
     }
@@ -102,5 +128,11 @@ class TasksViewModel: ObservableObject {
     func startNewTask() {
         editingTask = nil
         showingNewTask = true
+    }
+
+    private func normalizedAssignee(_ assignee: String?) -> String? {
+        guard let assignee else { return nil }
+        let trimmed = assignee.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

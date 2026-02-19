@@ -332,11 +332,11 @@ class ProjectsViewModel: ObservableObject {
         let projectName = project.title
 
         let seedTasks: [(String, String, String, TaskPriority)] = [
-            ("Finalize execution orchestration", "Jarvis coordinates delivery sequencing and ownership checkpoints for this project.", "Jarvis", .urgent),
-            ("Translate approved plan into implementation tasks", "Break the approved project plan into execution-ready work items and acceptance criteria.", "Scope", .high),
-            ("Research external dependencies and constraints", "Validate APIs, libraries, and integration constraints before implementation.", "Atlas", .medium),
-            ("Implement core product workflows", "Build the primary flows specified by the approved sections and design plan.", "Matrix", .high),
-            ("Define QA gates and validate readiness", "Set validation criteria and verify key paths before release.", "Prism", .high),
+            ("Finalize execution orchestration", "Jarvis coordinates delivery sequencing and ownership checkpoints for this project. Keep tasks independent to avoid agent thrash.", "Jarvis", .urgent),
+            ("Translate approved plan into implementation tasks", "Break the approved project plan into execution-ready work items and acceptance criteria. Ensure work can be done serially per agent.", "Scope", .high),
+            ("Research external dependencies and constraints", "Validate APIs, libraries, and integration constraints before implementation. Avoid creating tightly coupled parallel tasks for one agent.", "Atlas", .medium),
+            ("Implement core product workflows", "Build the primary flows specified by the approved sections and design plan. Keep each task completable without task switching.", "Matrix", .high),
+            ("Define QA gates and validate readiness", "Set validation criteria and verify key paths before release. Bundle related checks into focused single-lane tasks.", "Prism", .high),
         ]
 
         var created = 0
@@ -367,6 +367,8 @@ class ProjectsViewModel: ObservableObject {
         Project: \(projectName)
         Start execution now. Create and coordinate concrete task updates through the team.
         Prioritize urgent and high-priority work first.
+        Constraint: each agent can only have one task in progress at a time.
+        Constraint: create independent tasks that reduce switching and cross-task blocking.
         """
         _ = try? await gatewayService.sendAgentMessage(
             agentId: "jarvis",

@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskColumn: View {
     let status: TaskStatus
     let tasks: [TaskItem]
+    let isExecutionPaused: Bool
     let onDrop: ([TaskItem]) -> Bool
     let onMove: (UUID, TaskStatus) -> Void
     let onView: (TaskItem) -> Void
@@ -42,7 +43,11 @@ struct TaskColumn: View {
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(tasks) { task in
-                        TaskCard(task: task, onView: { onView(task) })
+                        TaskCard(
+                            task: task,
+                            onView: { onView(task) },
+                            showPausedOverlay: isExecutionPaused && status == .inProgress
+                        )
                             .draggable(task)
                             .contextMenu {
                                 Button("Edit") { onEdit(task) }
