@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct EditAgentView: View {
     let agent: Agent
@@ -16,6 +17,7 @@ struct EditAgentView: View {
     @State private var isSaving = false
     @State private var saveError: String?
     @State private var savedConfirmation = false
+    @FocusState private var isEmojiFieldFocused: Bool
 
     private let commonEmojis = ["🤖", "🧠", "🔍", "🧩", "📐", "🗺️", "⚡", "🎯", "🚀", "💡", "🔮", "🌟", "🦊", "🐉", "🦁"]
 
@@ -87,6 +89,7 @@ struct EditAgentView: View {
                             TextField("🤖", text: $agentEmoji)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 60)
+                                .focused($isEmojiFieldFocused)
                         }
                     }
 
@@ -100,6 +103,20 @@ struct EditAgentView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                                 .buttonStyle(.plain)
                         }
+                        Button {
+                            isEmojiFieldFocused = true
+                            DispatchQueue.main.async {
+                                NSApp.orderFrontCharacterPalette(nil)
+                            }
+                        } label: {
+                            Image(systemName: "face.smiling")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(width: 32, height: 32)
+                        }
+                        .background(Theme.darkSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .buttonStyle(.plain)
+                        .help("Open full emoji picker")
                     }
 
                     // Model picker

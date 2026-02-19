@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 // MARK: - Add Mode
 enum AddAgentMode {
@@ -80,6 +81,7 @@ struct CreateAgentForm: View {
     @State private var idleImagePath: String? = nil
     @State private var isCreating = false
     @State private var createError: String?
+    @FocusState private var isEmojiFieldFocused: Bool
 
     private let commonEmojis = ["🤖", "🧠", "🔍", "🧩", "📐", "🗺️", "⚡", "🎯", "🚀", "💡", "🔮", "🌟", "🦊", "🐉", "🦁"]
 
@@ -106,6 +108,7 @@ struct CreateAgentForm: View {
                         TextField("🤖", text: $agentEmoji)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 60)
+                            .focused($isEmojiFieldFocused)
                     }
                 }
 
@@ -119,6 +122,20 @@ struct CreateAgentForm: View {
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .buttonStyle(.plain)
                     }
+                    Button {
+                        isEmojiFieldFocused = true
+                        DispatchQueue.main.async {
+                            NSApp.orderFrontCharacterPalette(nil)
+                        }
+                    } label: {
+                        Image(systemName: "face.smiling")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 32, height: 32)
+                    }
+                    .background(Theme.darkSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .buttonStyle(.plain)
+                    .help("Open full emoji picker")
                 }
 
                 // Workspace (read-only preview)
