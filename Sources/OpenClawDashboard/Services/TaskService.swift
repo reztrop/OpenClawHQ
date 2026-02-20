@@ -46,10 +46,11 @@ class TaskService: ObservableObject {
     // MARK: - Persistence
 
     func loadTasks() {
+        // IMPORTANT: Never overwrite a user's tasks with sample data.
+        // If the file is missing, start empty.
         guard FileManager.default.fileExists(atPath: filePath) else {
-            tasks = Self.sampleTasks
-            _ = enforceSingleInProgressPerAgent()
-            saveTasks()
+            tasks = []
+            lastTasksFileModificationDate = fileModificationDate(at: filePath)
             return
         }
 
@@ -62,15 +63,32 @@ class TaskService: ObservableObject {
                 saveTasks()
             }
         } catch {
-            print("[TaskService] Failed to load tasks: \(error)")
-            tasks = Self.sampleTasks
-            _ = enforceSingleInProgressPerAgent()
-            saveTasks()
+            // Preserve the corrupt/unreadable file for later recovery.
+            let suffix = ISO8601DateFormatter().string(from: Date())
+            let corruptPath = filePath + ".corrupt-" + suffix + ".json"
+            do {
+                try FileManager.default.moveItem(atPath: filePath, toPath: corruptPath)
+                print("[TaskService] Moved unreadable tasks file to: \(corruptPath)")
+            } catch {
+                print("[TaskService] Failed to preserve unreadable tasks file: \(error)")
+            }
+
+            print("[TaskService] Failed to load tasks (starting empty): \(error)")
+            tasks = []
+            lastTasksFileModificationDate = fileModificationDate(at: filePath)
         }
     }
 
     func saveTasks() {
         do {
+            // Best-effort backup of the prior file (if it exists) to reduce recovery pain.
+            if FileManager.default.fileExists(atPath: filePath) {
+                let suffix = ISO8601DateFormatter().string(from: Date())
+                let backupPath = filePath + ".bak-" + suffix
+                // Copy (not move) so the app continues to function if backup fails.
+                _ = try? FileManager.default.copyItem(atPath: filePath, toPath: backupPath)
+            }
+
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
