@@ -200,6 +200,39 @@ final class TaskInterventionServiceTests: XCTestCase {
         XCTAssertEqual(gateway.sentMessages.count, 1)
     }
 
+    func testMarkerInstructionTextDoesNotCountAsRecurringTaskBlockedIssue() async {
+        let paths = makeTempPaths(testName: #function)
+        defer { cleanup(paths.dir) }
+
+        let markerInstruction = """
+        End with exactly one marker line:
+        [task-complete] if done,
+        [task-continue] if more work remains,
+        [task-blocked] if blocked waiting on dependency.
+        """
+
+        let taskService = TaskService(filePath: paths.tasksFile, stateFilePath: paths.taskStateFile)
+        taskService.tasks = [
+            makeTask(title: "A", evidence: markerInstruction),
+            makeTask(title: "B", evidence: markerInstruction),
+            makeTask(title: "C", evidence: markerInstruction)
+        ]
+
+        let gateway = MockGatewayService()
+        let service = TaskInterventionService(
+            taskService: taskService,
+            gatewayService: gateway,
+            reportsDirectoryPath: paths.reportsDir,
+            stateFilePath: paths.interventionStateFile
+        )
+
+        let result = await service.evaluateRecurringIssueIntervention(tasks: taskService.tasks)
+
+        XCTAssertNil(result)
+        XCTAssertFalse(taskService.isExecutionPaused)
+        XCTAssertEqual(gateway.sentMessages.count, 0)
+    }
+
     private func makeTask(title: String, evidence: String) -> TaskItem {
         TaskItem(title: title, assignedAgent: "Matrix", status: .inProgress, lastEvidence: evidence)
     }

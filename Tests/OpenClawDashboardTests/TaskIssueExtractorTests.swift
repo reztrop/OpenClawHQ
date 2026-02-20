@@ -57,6 +57,16 @@ final class TaskIssueExtractorTests: XCTestCase {
         XCTAssertTrue(issues.isEmpty)
     }
 
+    func testExtractIssuesIgnoresPassingRegressionPreventionValidationStatus() {
+        let response = """
+        task-1300 regression-prevention validation passed successfully
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertTrue(issues.isEmpty)
+    }
+
     func testExtractIssuesIgnoresRemediatedOutcomeParserRiskLine() {
         let response = """
         Issue: 2) Outcome parser false-complete risk — PASS (remediated)
@@ -76,6 +86,17 @@ final class TaskIssueExtractorTests: XCTestCase {
 
         XCTAssertEqual(issues.count, 1)
         XCTAssertEqual(issues.first, "FAIL: task-1300 regression checks complete with keyboard trap issue in model picker")
+    }
+
+    func testExtractIssuesKeepsFailingRegressionPreventionValidationStatus() {
+        let response = """
+        task-1300 regression-prevention validation failed on task marker parsing
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertEqual(issues.count, 1)
+        XCTAssertEqual(issues.first, "task-1300 regression-prevention validation failed on task marker parsing")
     }
 
     func testExtractIssuesIgnoresPassingRegressionEvidenceStatus() {

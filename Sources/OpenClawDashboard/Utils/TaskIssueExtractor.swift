@@ -111,6 +111,11 @@ enum TaskIssueExtractor {
                 return true
             }
         }
+        if normalized.contains("regression-prevention validation")
+            && normalized.range(of: #"\b(pass|passed|success|successful)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
+            && normalized.range(of: #"\b(fail|failed|failing|error|issue|problem)\b"#, options: [.regularExpression, .caseInsensitive]) == nil {
+            return true
+        }
         let passingSignals = [
             "all checks passed",
             "no regressions found"

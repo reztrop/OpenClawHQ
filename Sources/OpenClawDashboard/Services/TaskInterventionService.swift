@@ -93,15 +93,65 @@ final class TaskInterventionService {
             "run error: disconnected": "gateway_disconnected",
             "gateway disconnected": "gateway_disconnected",
             "invalid handshake": "gateway_handshake",
-            "[task-blocked]": "task_blocked",
             "task blocked": "task_blocked",
             "cannot proceed without": "missing_scope",
             "missing execution artifact": "missing_scope"
         ]
+
+        if hasExplicitTaskBlockedOutcome(in: evidence) {
+            markers.append("task_blocked")
+        }
+
         for (needle, label) in map where evidence.contains(needle) {
             markers.append(label)
         }
         return Array(Set(markers))
+    }
+
+    private func hasExplicitTaskBlockedOutcome(in evidence: String) -> Bool {
+        let lines = evidence
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+
+        for line in lines {
+            if isExplicitBlockedOutcomeLine(line) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func isExplicitBlockedOutcomeLine(_ line: String) -> Bool {
+        let marker = "[task-blocked]"
+
+        if line == marker {
+            return true
+        }
+
+        if line.hasPrefix(marker) {
+            let suffix = String(line.dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if suffix.isEmpty {
+                return true
+            }
+            if suffix.hasPrefix("if ") || suffix.hasPrefix("when ") {
+                return false
+            }
+            return true
+        }
+
+        if line.hasPrefix("issue:") {
+            let remainder = String(line.dropFirst("issue:".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if remainder.hasPrefix(marker) {
+                let suffix = String(remainder.dropFirst(marker.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if suffix.hasPrefix("if ") || suffix.hasPrefix("when ") {
+                    return false
+                }
+                return true
+            }
+        }
+
+        return false
     }
 
     private func writeInterventionReport(dominantIssue: String, issueCounts: [String: Int], affectedTasks: [TaskItem], generatedAt: Date) -> String {
