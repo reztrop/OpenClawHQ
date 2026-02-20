@@ -4,62 +4,87 @@ final class VisualScopeLockGuardrailTests: XCTestCase {
     func testAppViewModelDoesNotContainTaskOrchestrationRuntime() throws {
         let source = try loadSource("Sources/OpenClawDashboard/ViewModels/AppViewModel.swift")
 
-        let forbiddenSymbols = [
-            "startImplementation(for task:",
-            "runTaskOrchestrationTick()",
-            "routeIssuesToJarvisAndCreateFixTasks",
-            "startTaskOrchestrationLoop()",
-            "handleTaskExecutionEvent(_ event:",
-            "recurringIssueMarkers(in evidence:",
-            "writeInterventionReport(dominantIssue:",
-            "notifyJarvisOfIntervention(reportPath:",
-            "interventionCooldown",
-            "private func evaluateRecurringIssueIntervention(tasks:"
-        ]
-
-        for symbol in forbiddenSymbols {
-            XCTAssertFalse(
-                source.contains(symbol),
-                "AppViewModel reintroduced orchestration symbol: \(symbol)"
-            )
-        }
+        assertSource(
+            source,
+            doesNotContain: [
+                "startImplementation(for task:",
+                "runTaskOrchestrationTick()",
+                "routeIssuesToJarvisAndCreateFixTasks",
+                "startTaskOrchestrationLoop()",
+                "handleTaskExecutionEvent(_ event:",
+                "recurringIssueMarkers(in evidence:",
+                "writeInterventionReport(dominantIssue:",
+                "notifyJarvisOfIntervention(reportPath:",
+                "interventionCooldown",
+                "private func evaluateRecurringIssueIntervention(tasks:"
+            ],
+            context: "AppViewModel"
+        )
     }
 
     func testProjectsViewModelDoesNotContainExecutionAutomationScaffolding() throws {
         let source = try loadSource("Sources/OpenClawDashboard/ViewModels/ProjectsViewModel.swift")
 
-        let forbiddenSymbols = [
-            "createSectionWorkflowTasks(",
-            "startVerificationRound(",
-            "finalizeProject(projectId:",
-            "sendJarvisKickoff(message:",
-            "[project-execute]"
-        ]
-
-        for symbol in forbiddenSymbols {
-            XCTAssertFalse(
-                source.contains(symbol),
-                "ProjectsViewModel reintroduced non-visual execution logic: \(symbol)"
-            )
-        }
+        assertSource(
+            source,
+            doesNotContain: [
+                "createSectionWorkflowTasks(",
+                "startVerificationRound(",
+                "finalizeProject(projectId:",
+                "sendJarvisKickoff(message:",
+                "[project-execute]"
+            ],
+            context: "ProjectsViewModel"
+        )
     }
 
     func testRecurringIssueInterventionLivesInServiceLayer() throws {
         let appSource = try loadSource("Sources/OpenClawDashboard/ViewModels/AppViewModel.swift")
-        XCTAssertTrue(
-            appSource.contains("taskInterventionService.evaluateRecurringIssueIntervention(tasks: tasks)"),
-            "AppViewModel should delegate recurring issue intervention to service layer"
+        assertSource(
+            appSource,
+            contains: [
+                "taskInterventionService.evaluateRecurringIssueIntervention(tasks: tasks)"
+            ],
+            context: "AppViewModel"
         )
 
         let serviceSource = try loadSource("Sources/OpenClawDashboard/Services/TaskInterventionService.swift")
-        XCTAssertTrue(
-            serviceSource.contains("final class TaskInterventionService"),
-            "TaskInterventionService missing"
+        assertSource(
+            serviceSource,
+            contains: [
+                "final class TaskInterventionService",
+                "notifyJarvisOfIntervention(reportPath:",
+                "recurringIssueMarkers(in evidence:",
+                "interventionCooldown"
+            ],
+            context: "TaskInterventionService"
         )
-        XCTAssertTrue(
-            serviceSource.contains("notifyJarvisOfIntervention(reportPath:"),
-            "Jarvis intervention handling should live in TaskInterventionService"
-        )
+    }
+
+    private func assertSource(
+        _ source: String,
+        contains requiredSymbols: [String],
+        context: String
+    ) {
+        for symbol in requiredSymbols {
+            XCTAssertTrue(
+                source.contains(symbol),
+                "\(context) missing expected guardrail symbol: \(symbol)"
+            )
+        }
+    }
+
+    private func assertSource(
+        _ source: String,
+        doesNotContain forbiddenSymbols: [String],
+        context: String
+    ) {
+        for symbol in forbiddenSymbols {
+            XCTAssertFalse(
+                source.contains(symbol),
+                "\(context) reintroduced forbidden symbol: \(symbol)"
+            )
+        }
     }
 
     private func loadSource(_ relativePath: String) throws -> String {

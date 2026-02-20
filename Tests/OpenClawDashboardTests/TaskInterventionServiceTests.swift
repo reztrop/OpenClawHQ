@@ -105,6 +105,37 @@ final class TaskInterventionServiceTests: XCTestCase {
         XCTAssertEqual(secondGateway.sentMessages.count, 0)
     }
 
+    func testInterventionReportUsesInjectedClockForGeneratedTimestamp() async throws {
+        let paths = makeTempPaths(testName: #function)
+        defer { cleanup(paths.dir) }
+
+        let taskService = TaskService(filePath: paths.tasksFile, stateFilePath: paths.taskStateFile)
+        taskService.tasks = [
+            makeTask(title: "A", evidence: "status 429 from provider"),
+            makeTask(title: "B", evidence: "Too many requests while sending"),
+            makeTask(title: "C", evidence: "rate limited by upstream")
+        ]
+
+        let fixedNow = Date(timeIntervalSince1970: 1_700_000_000)
+        let gateway = MockGatewayService()
+        let service = TaskInterventionService(
+            taskService: taskService,
+            gatewayService: gateway,
+            reportsDirectoryPath: paths.reportsDir,
+            stateFilePath: paths.interventionStateFile,
+            now: { fixedNow }
+        )
+
+        _ = await service.evaluateRecurringIssueIntervention(tasks: taskService.tasks)
+
+        let reportFiles = try FileManager.default.contentsOfDirectory(atPath: paths.reportsDir)
+        XCTAssertEqual(reportFiles.count, 1)
+
+        let reportPath = (paths.reportsDir as NSString).appendingPathComponent(reportFiles[0])
+        let report = try String(contentsOfFile: reportPath, encoding: .utf8)
+        XCTAssertTrue(report.contains("Generated: \(fixedNow.shortString)"))
+    }
+
     func testTaskBlockedMarkersTriggerInterventionAndJarvisMessageIncludesReport() async {
         let paths = makeTempPaths(testName: #function)
         defer { cleanup(paths.dir) }
