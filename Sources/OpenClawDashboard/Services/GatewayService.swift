@@ -60,6 +60,7 @@ class GatewayService: ObservableObject {
     private var reconnectAttempts = 0
     private let maxReconnectDelay: TimeInterval = 30
     private var isReconnecting = false
+    private var agentRateLimitUntil: [String: Date] = [:]
     private var receiveTask: Task<Void, Never>?
     private var pingTask: Task<Void, Never>?
     private var currentHost: String = Constants.gatewayHost
@@ -408,68 +409,84 @@ class GatewayService: ObservableObject {
     }
 
     func sendAgentMessage(agentId: String, message: String, sessionKey: String?, thinkingEnabled: Bool) async throws -> AgentMessageResponse {
+        let normalizedAgentId = agentId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let cooldown = agentRateLimitUntil[normalizedAgentId], cooldown > Date() {
+            let retryAt = cooldown.formatted(date: .abbreviated, time: .shortened)
+            throw GatewayError(code: -7, message: "Rate limited for \(agentId). Retry after \(retryAt).")
+        }
+
         let resolvedSessionKey = resolveSessionKey(agentId: agentId, explicitKey: sessionKey)
         let idempotencyKey = UUID().uuidString
 
-        // Step 1: Send the message via `agent` RPC — returns { runId, status: "accepted" }
-        // Note: model selection must be set on the agent via agents.update — the agent RPC
-        // does not accept a model parameter at the root level.
-        let agentParams: [String: Any] = [
-            "message": message,
-            "agentId": agentId,
-            "sessionKey": resolvedSessionKey,
-            "idempotencyKey": idempotencyKey,
-            "thinking": thinkingEnabled ? "low" : "off"
-        ]
-        let agentResult = try await sendRPCWithTimeout("agent", params: agentParams, timeout: 30)
-        let agentDict = agentResult?.dictionary ?? [:]
-        guard let runId = agentDict["runId"] as? String, !runId.isEmpty else {
-            throw GatewayError(code: -4, message: "agent RPC did not return a runId (got: \(agentDict.keys.sorted()))")
+        do {
+            // Step 1: Send the message via `agent` RPC — returns { runId, status: "accepted" }
+            // Note: model selection must be set on the agent via agents.update — the agent RPC
+            // does not accept a model parameter at the root level.
+            let agentParams: [String: Any] = [
+                "message": message,
+                "agentId": agentId,
+                "sessionKey": resolvedSessionKey,
+                "idempotencyKey": idempotencyKey,
+                "thinking": thinkingEnabled ? "low" : "off"
+            ]
+            let agentResult = try await sendRPCWithTimeout("agent", params: agentParams, timeout: 30)
+            let agentDict = agentResult?.dictionary ?? [:]
+            guard let runId = agentDict["runId"] as? String, !runId.isEmpty else {
+                throw GatewayError(code: -4, message: "agent RPC did not return a runId (got: \(agentDict.keys.sorted()))")
+            }
+
+            // Step 2: Wait for the agent run to complete via `agent.wait`
+            // This is cancellable — if the Task is cancelled we fall through to history fetch
+            // so we can still surface whatever text was already streamed.
+            let waitResult = try? await withTaskCancellationHandler {
+                try await sendRPCWithTimeout("agent.wait", params: ["runId": runId, "timeoutMs": 180_000], timeout: 185)
+            } onCancel: {
+                // Fire-and-forget cancel RPC when the task is cancelled from outside
+                Task { [weak self] in
+                    _ = try? await self?.cancelRun(runId: runId)
+                }
+            }
+
+            if let waitDict = waitResult?.dictionary {
+                let waitStatus = waitDict["status"] as? String ?? "unknown"
+                if waitStatus == "timeout" {
+                    throw GatewayError(code: -5, message: "Agent run timed out (runId: \(runId.prefix(8)))")
+                }
+                if waitStatus == "error" {
+                    let errMsg = waitDict["error"] as? String ?? "unknown error"
+                    throw GatewayError(code: -6, message: "Agent run failed: \(errMsg)")
+                }
+            }
+            // If waitResult is nil the task was cancelled — fall through and return whatever text
+            // was already streamed (ChatViewModel prefers streamingText over response.text anyway).
+
+            // Step 3: Fetch the latest assistant message from chat history
+            let historyResult = try await sendRPC("chat.history", params: ["sessionKey": resolvedSessionKey, "limit": 10])
+            let historyDict = historyResult?.dictionary ?? [:]
+            let messages = historyDict["messages"] as? [[String: Any]] ?? []
+
+            // Get the last assistant message
+            let lastAssistant = messages.last(where: { ($0["role"] as? String) == "assistant" })
+            let text: String = {
+                guard let msg = lastAssistant else { return "" }
+                if let t = msg["text"] as? String { return t }
+                if let t = msg["content"] as? String { return t }
+                if let parts = msg["content"] as? [[String: Any]] {
+                    return parts.compactMap { $0["text"] as? String }.joined(separator: "\n")
+                }
+                return ""
+            }()
+
+            // Successful run clears any previous cooldown.
+            agentRateLimitUntil.removeValue(forKey: normalizedAgentId)
+            return AgentMessageResponse(text: text, sessionKey: resolvedSessionKey)
+        } catch {
+            if isRateLimitError(error) {
+                // 60 minute cooldown when provider indicates quota/rate limiting.
+                agentRateLimitUntil[normalizedAgentId] = Date().addingTimeInterval(60 * 60)
+            }
+            throw error
         }
-
-        // Step 2: Wait for the agent run to complete via `agent.wait`
-        // This is cancellable — if the Task is cancelled we fall through to history fetch
-        // so we can still surface whatever text was already streamed.
-        let waitResult = try? await withTaskCancellationHandler {
-            try await sendRPCWithTimeout("agent.wait", params: ["runId": runId, "timeoutMs": 180_000], timeout: 185)
-        } onCancel: {
-            // Fire-and-forget cancel RPC when the task is cancelled from outside
-            Task { [weak self] in
-                _ = try? await self?.cancelRun(runId: runId)
-            }
-        }
-
-        if let waitDict = waitResult?.dictionary {
-            let waitStatus = waitDict["status"] as? String ?? "unknown"
-            if waitStatus == "timeout" {
-                throw GatewayError(code: -5, message: "Agent run timed out (runId: \(runId.prefix(8)))")
-            }
-            if waitStatus == "error" {
-                let errMsg = waitDict["error"] as? String ?? "unknown error"
-                throw GatewayError(code: -6, message: "Agent run failed: \(errMsg)")
-            }
-        }
-        // If waitResult is nil the task was cancelled — fall through and return whatever text
-        // was already streamed (ChatViewModel prefers streamingText over response.text anyway).
-
-        // Step 3: Fetch the latest assistant message from chat history
-        let historyResult = try await sendRPC("chat.history", params: ["sessionKey": resolvedSessionKey, "limit": 10])
-        let historyDict = historyResult?.dictionary ?? [:]
-        let messages = historyDict["messages"] as? [[String: Any]] ?? []
-
-        // Get the last assistant message
-        let lastAssistant = messages.last(where: { ($0["role"] as? String) == "assistant" })
-        let text: String = {
-            guard let msg = lastAssistant else { return "" }
-            if let t = msg["text"] as? String { return t }
-            if let t = msg["content"] as? String { return t }
-            if let parts = msg["content"] as? [[String: Any]] {
-                return parts.compactMap { $0["text"] as? String }.joined(separator: "\n")
-            }
-            return ""
-        }()
-
-        return AgentMessageResponse(text: text, sessionKey: resolvedSessionKey)
     }
 
     /// Sends agent.cancel for a running agent run. Best-effort — errors are ignored by callers.
@@ -687,6 +704,14 @@ class GatewayService: ObservableObject {
             return "Unknown connection state"
         }()
         throw GatewayError(code: -1, message: "Not connected to gateway (\(message))")
+    }
+
+    private func isRateLimitError(_ error: Error) -> Bool {
+        let text = error.localizedDescription.lowercased()
+        let patterns = [
+            "rate limit", "rate-limited", "too many requests", "http 429", "status 429", "quota exceeded"
+        ]
+        return patterns.contains { text.contains($0) }
     }
 
     // MARK: - Ping
