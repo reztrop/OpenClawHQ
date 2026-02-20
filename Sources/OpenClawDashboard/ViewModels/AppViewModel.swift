@@ -58,6 +58,10 @@ class AppViewModel: ObservableObject {
             guard let self else { return }
             self.projectsViewModel.registerProjectScopeReady(conversationId: sessionKey, assistantResponse: assistantResponse)
         }
+        chatViewModel.onProjectChatAssistantMessage = { [weak self] sessionKey, message in
+            guard let self else { return }
+            self.projectsViewModel.handleProjectChatAssistantMessage(conversationId: sessionKey, message: message)
+        }
         chatViewModel.onProjectChatUserMessage = { [weak self] sessionKey, message in
             guard let self else { return }
             self.projectsViewModel.handleProjectChatUserMessage(conversationId: sessionKey, message: message)
@@ -133,5 +137,6 @@ class AppViewModel: ObservableObject {
     private func initialFetch() async {
         await agentsViewModel.refreshAgents()
         await skillsViewModel.refreshSkills()
+        await projectsViewModel.reconcilePendingPlanningFromChatHistory()
     }
 }

@@ -76,6 +76,7 @@ class ChatViewModel: ObservableObject {
     var onProjectPlanningStarted: ((String, String) -> Void)?
     var onProjectScopeReady: ((String, String) -> Void)?
     var onProjectChatUserMessage: ((String, String) -> Void)?
+    var onProjectChatAssistantMessage: ((String, String) -> Void)?
 
     private var uploadsDir: String {
         NSString(string: "~/.openclaw/workspace/uploads/chat").expandingTildeInPath
@@ -368,6 +369,9 @@ class ChatViewModel: ObservableObject {
             if let key = selectedConversationId {
                 if isProjectPlanningKickoff {
                     onProjectPlanningStarted?(key, userVisibleText)
+                }
+                if agentId.lowercased() == "jarvis" {
+                    onProjectChatAssistantMessage?(key, assistantText)
                 }
                 if assistantText.lowercased().contains("[project-ready]") {
                     onProjectScopeReady?(key, assistantText)

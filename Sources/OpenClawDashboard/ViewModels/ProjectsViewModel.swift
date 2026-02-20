@@ -393,6 +393,29 @@ class ProjectsViewModel: ObservableObject {
             : "Execution started. Created \(created) task(s) in Ready."
     }
 
+    func reconcilePendingPlanningFromChatHistory() async {
+        let pending = pendingPlanningByConversation.values
+        guard !pending.isEmpty else { return }
+
+        for kickoff in pending {
+            guard pendingPlanningByConversation[kickoff.conversationId] != nil else { continue }
+            guard projects.contains(where: { $0.conversationId == kickoff.conversationId }) == false else {
+                pendingPlanningByConversation.removeValue(forKey: kickoff.conversationId)
+                continue
+            }
+
+            do {
+                let history = try await gatewayService.fetchSessionHistory(sessionKey: kickoff.conversationId, limit: 120)
+                guard let scopeReadyMessage = history
+                    .reversed()
+                    .first(where: { $0.role.lowercased() == "assistant" && indicatesScopeReady($0.text) }) else { continue }
+                registerProjectScopeReady(conversationId: kickoff.conversationId, assistantResponse: scopeReadyMessage.text)
+            } catch {
+                continue
+            }
+        }
+    }
+
     func handleTaskMovedToDone(_ task: TaskItem) {
         guard let projectId = task.projectId else { return }
         guard var project = projects.first(where: { $0.id == projectId }) else { return }
@@ -441,6 +464,12 @@ class ProjectsViewModel: ObservableObject {
             }
             finalizeProject(projectId: project.id)
         }
+    }
+
+    func handleProjectChatAssistantMessage(conversationId: String, message: String) {
+        guard pendingPlanningByConversation[conversationId] != nil else { return }
+        guard indicatesScopeReady(message) else { return }
+        registerProjectScopeReady(conversationId: conversationId, assistantResponse: message)
     }
 
     private func evaluateVerificationCompletion(for project: inout ProjectRecord, completedTask: TaskItem) {
@@ -613,6 +642,48 @@ class ProjectsViewModel: ObservableObject {
     private func cleanedKickoffPrompt(_ raw: String) -> String {
         raw.replacingOccurrences(of: "[project]", with: "", options: [.caseInsensitive])
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func indicatesScopeReady(_ raw: String) -> Bool {
+        let lower = raw.lowercased()
+        if lower.contains("[project-ready]") { return true }
+
+        let normalized = lower.replacingOccurrences(of: "[^a-z0-9\\s-]", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let negativePhrases = [
+            "not ready",
+            "isn't ready",
+            "is not complete",
+            "not complete",
+            "still planning",
+            "still scoping"
+        ]
+        if negativePhrases.contains(where: { normalized.contains($0) }) {
+            return false
+        }
+
+        let directPhrases = [
+            "project is scoped",
+            "scope is ready",
+            "scoping is complete",
+            "scope complete",
+            "project scope is complete",
+            "project scope is ready",
+            "ready to create the project",
+            "new project created",
+            "project has been created",
+            "created a new project",
+            "created the project"
+        ]
+        if directPhrases.contains(where: { normalized.contains($0) }) {
+            return true
+        }
+
+        let hasScopeOrProject = normalized.contains("project") || normalized.contains("scope") || normalized.contains("scoping")
+        let hasReadySignal = normalized.contains("ready") || normalized.contains("complete") || normalized.contains("completed") || normalized.contains("created")
+        return hasScopeOrProject && hasReadySignal
     }
 
     private func buildOverview(kickoff: String, assistant: String) -> String {

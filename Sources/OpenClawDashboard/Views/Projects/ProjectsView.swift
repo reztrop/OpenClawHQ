@@ -77,7 +77,7 @@ struct ProjectsView: View {
                 Text("No Projects Yet")
                     .font(.title3.bold())
                     .foregroundColor(.white)
-                Text("Use Chat -> + -> Start Project Planning, then work with Jarvis. A project will appear here when Jarvis marks it [project-ready].")
+                Text("Use Chat -> Start Project Planning, then work with Jarvis. A project appears here once Jarvis confirms scope is ready.")
                     .foregroundColor(Theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 680)
@@ -102,7 +102,7 @@ struct ProjectsView: View {
                     Text("No projects yet")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(.white)
-                    Text("Projects are created automatically after planning in Jarvis chat is marked [project-ready].")
+                    Text("Projects are created automatically when Jarvis confirms planning scope is ready.")
                         .font(.caption)
                         .foregroundColor(Theme.textSecondary)
                 }
