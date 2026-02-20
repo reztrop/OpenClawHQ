@@ -48,6 +48,14 @@ class AppViewModel: ObservableObject {
     private var notificationService: NotificationService?
     private lazy var taskInterventionService = TaskInterventionService(taskService: taskService, gatewayService: gatewayService)
     private lazy var taskCompactionService = TaskCompactionService(taskService: taskService, gatewayService: gatewayService)
+    private lazy var taskExecutionService = TaskExecutionService(
+        taskService: taskService,
+        gatewayService: gatewayService,
+        onTaskCompleted: { [weak self] task in
+            guard let self else { return }
+            self.projectsViewModel.handleTaskMovedToDone(task)
+        }
+    )
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -71,6 +79,10 @@ class AppViewModel: ObservableObject {
         tasksViewModel.onTaskMovedToDone = { [weak self] task in
             guard let self else { return }
             self.projectsViewModel.handleTaskMovedToDone(task)
+        }
+        tasksViewModel.onTaskMovedToInProgress = { [weak self] task in
+            guard let self else { return }
+            self.taskExecutionService.handleTaskMovedToInProgress(task)
         }
 
         // Set up notifications

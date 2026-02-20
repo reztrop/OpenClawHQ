@@ -284,7 +284,7 @@ class TaskService: ObservableObject {
     /// Compacts high-volume queued/ready work by merging duplicate or near-duplicate tasks.
     /// This is intentionally conservative: only non-archived, non-verification tasks in
     /// Ready/Queue are eligible.
-    func compactTaskBacklogIfNeeded(minimumActiveTasks: Int = 180, maxMerges: Int = 80) -> TaskCompactionReport? {
+    func compactTaskBacklogIfNeeded(minimumActiveTasks: Int = 220, maxMerges: Int = 25) -> TaskCompactionReport? {
         let eligibleIndices = tasks.indices.filter { idx in
             let t = tasks[idx]
             guard !t.isArchived else { return false }
@@ -330,7 +330,10 @@ class TaskService: ObservableObject {
         }
 
         // Pass 2: near-duplicates within same project/agent bucket.
-        if mergesRemaining > 0 {
+        // Disabled by default to avoid aggressive archival; strict duplicate compaction
+        // from pass 1 remains active and much safer.
+        let enableNearDuplicateMerge = false
+        if enableNearDuplicateMerge && mergesRemaining > 0 {
             let secondaryEligible = tasks.indices.filter { idx in
                 let t = tasks[idx]
                 guard !t.isArchived else { return false }
