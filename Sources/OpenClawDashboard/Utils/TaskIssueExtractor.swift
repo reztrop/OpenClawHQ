@@ -120,13 +120,22 @@ enum TaskIssueExtractor {
 
     static func isVerificationStatusSignal(_ text: String) -> Bool {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let strippedIssuePrefix = normalized.replacingOccurrences(of: #"^issue:\s*"#, with: "", options: [.regularExpression, .caseInsensitive])
 
         let hasCheckPrefix = normalized.hasPrefix("checked ") || normalized.hasPrefix("check: ")
         let hasConfirmation = normalized.contains("confirmed")
         let confirmsExistingPath = normalized.contains("already exists") || normalized.contains("exists in")
         let confirmsServiceBoundary = normalized.contains("remains in") || normalized.contains("delegation path")
 
-        return hasCheckPrefix && hasConfirmation && (confirmsExistingPath || confirmsServiceBoundary)
+        if hasCheckPrefix && hasConfirmation && (confirmsExistingPath || confirmsServiceBoundary) {
+            return true
+        }
+
+        let confirmsRegressionEvidenceCommitPresence = strippedIssuePrefix.contains("confirmed")
+            && strippedIssuePrefix.contains("regression evidence commit")
+            && (strippedIssuePrefix.contains("is present") || strippedIssuePrefix.contains("already present"))
+
+        return confirmsRegressionEvidenceCommitPresence
     }
 
     static func isExternalDependencySignal(_ text: String) -> Bool {

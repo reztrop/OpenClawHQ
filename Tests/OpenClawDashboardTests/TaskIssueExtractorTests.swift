@@ -108,4 +108,14 @@ final class TaskIssueExtractorTests: XCTestCase {
 
         XCTAssertTrue(issues.isEmpty)
     }
+
+    func testExtractIssuesIgnoresConfirmedSingleActiveTaskRegressionEvidenceCommitPresence() {
+        let response = """
+        Issue: Confirmed single-active-task regression evidence commit is present:
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertTrue(issues.isEmpty)
+    }
 }
