@@ -45,4 +45,25 @@ final class TaskIssueExtractorTests: XCTestCase {
         XCTAssertEqual(issues.count, 1)
         XCTAssertEqual(issues.first, "FAIL: task-1300 regression checks complete with keyboard trap issue in model picker")
     }
+
+    func testExtractIssuesIgnoresPassingRegressionEvidenceStatus() {
+        let response = """
+        EV-1300-001 (PASS): task-1300 regression checks complete
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertTrue(issues.isEmpty)
+    }
+
+    func testExtractIssuesKeepsFailingRegressionEvidenceStatus() {
+        let response = """
+        EV-1300-002 (FAIL): task-1300 regression checks complete with keyboard trap issue in model picker
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertEqual(issues.count, 1)
+        XCTAssertEqual(issues.first, "EV-1300-002 (FAIL): task-1300 regression checks complete with keyboard trap issue in model picker")
+    }
 }

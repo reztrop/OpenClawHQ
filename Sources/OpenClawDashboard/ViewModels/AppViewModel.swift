@@ -103,7 +103,10 @@ class AppViewModel: ObservableObject {
             .sink { [weak self] tasks in
                 guard let self else { return }
                 Task { [weak self] in
-                    await self?.evaluateRecurringIssueIntervention(tasks: tasks)
+                    guard let self else { return }
+                    if let interventionMessage = await self.taskInterventionService.evaluateRecurringIssueIntervention(tasks: tasks) {
+                        self.errorMessage = interventionMessage
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -151,9 +154,5 @@ class AppViewModel: ObservableObject {
         await projectsViewModel.reconcilePendingPlanningFromChatHistory()
     }
 
-    private func evaluateRecurringIssueIntervention(tasks: [TaskItem]) async {
-        if let interventionMessage = await taskInterventionService.evaluateRecurringIssueIntervention(tasks: tasks) {
-            errorMessage = interventionMessage
-        }
-    }
+    // recurring-issue intervention delegated directly in task sink
 }
