@@ -2,16 +2,34 @@ import Foundation
 
 @MainActor
 final class TaskInterventionService {
+    private struct InterventionState: Codable {
+        var lastInterventionFingerprint: String?
+        var lastInterventionAt: Date?
+    }
+
     private let taskService: TaskService
     private let gatewayService: GatewayService
+    private let reportsDirectoryPath: String
+    private let stateFilePath: String
+    private let now: () -> Date
 
     private var lastInterventionFingerprint: String?
     private var lastInterventionAt: Date?
     private let interventionCooldown: TimeInterval = 30 * 60
 
-    init(taskService: TaskService, gatewayService: GatewayService) {
+    init(
+        taskService: TaskService,
+        gatewayService: GatewayService,
+        reportsDirectoryPath: String = Constants.taskInterventionReportsDirectory,
+        stateFilePath: String = Constants.taskInterventionStateFilePath,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.taskService = taskService
         self.gatewayService = gatewayService
+        self.reportsDirectoryPath = reportsDirectoryPath
+        self.stateFilePath = stateFilePath
+        self.now = now
+        loadInterventionState()
     }
 
     func evaluateRecurringIssueIntervention(tasks: [TaskItem]) async -> String? {
@@ -40,7 +58,7 @@ final class TaskInterventionService {
         guard dominantCount >= 3 else { return nil }
 
         let fingerprint = "\(dominantIssue)|\(affectedTasks.map { $0.id.uuidString }.sorted().joined(separator: ","))"
-        let now = Date()
+        let now = now()
         if lastInterventionFingerprint == fingerprint,
            let last = lastInterventionAt,
            now.timeIntervalSince(last) < interventionCooldown {
@@ -57,6 +75,7 @@ final class TaskInterventionService {
 
         lastInterventionFingerprint = fingerprint
         lastInterventionAt = now
+        saveInterventionState()
         return "Recurring issue detected. Tasks paused and Jarvis intervention report generated."
     }
 
@@ -80,8 +99,8 @@ final class TaskInterventionService {
     }
 
     private func writeInterventionReport(dominantIssue: String, issueCounts: [String: Int], affectedTasks: [TaskItem]) -> String {
-        let reportsDir = NSString(string: "~/.openclaw/workspace/reports").expandingTildeInPath
-        let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let reportsDir = reportsDirectoryPath
+        let timestamp = ISO8601DateFormatter().string(from: now()).replacingOccurrences(of: ":", with: "-")
         let filePath = "\(reportsDir)/jarvis_intervention_\(timestamp).md"
 
         let issueLines = issueCounts
@@ -123,6 +142,37 @@ final class TaskInterventionService {
             return filePath
         } catch {
             return "Failed to write report: \(error.localizedDescription)"
+        }
+    }
+
+    private func loadInterventionState() {
+        guard FileManager.default.fileExists(atPath: stateFilePath) else { return }
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: stateFilePath))
+            let decoder = JSONDecoder()
+            let state = try decoder.decode(InterventionState.self, from: data)
+            lastInterventionFingerprint = state.lastInterventionFingerprint
+            lastInterventionAt = state.lastInterventionAt
+        } catch {
+            lastInterventionFingerprint = nil
+            lastInterventionAt = nil
+        }
+    }
+
+    private func saveInterventionState() {
+        do {
+            let state = InterventionState(
+                lastInterventionFingerprint: lastInterventionFingerprint,
+                lastInterventionAt: lastInterventionAt
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(state)
+            let stateDir = URL(fileURLWithPath: stateFilePath).deletingLastPathComponent().path
+            try FileManager.default.createDirectory(atPath: stateDir, withIntermediateDirectories: true)
+            try data.write(to: URL(fileURLWithPath: stateFilePath), options: .atomic)
+        } catch {
+            print("[TaskInterventionService] Failed to save cooldown state: \(error)")
         }
     }
 
