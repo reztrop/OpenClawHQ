@@ -273,8 +273,14 @@ class GatewayService: ObservableObject {
     // MARK: - RPC
 
     func sendRPC(_ method: String, params: [String: Any]? = nil) async throws -> AnyCodable? {
+        if method != "connect" {
+            try await ensureConnected(timeoutSeconds: 20)
+        }
         guard let ws = webSocketTask else {
             throw GatewayError(code: -1, message: "Not connected to gateway")
+        }
+        if method != "connect", !connectionState.isConnected {
+            throw GatewayError(code: -1, message: "Gateway is not connected yet")
         }
 
         let id = UUID().uuidString
@@ -306,8 +312,14 @@ class GatewayService: ObservableObject {
     }
 
     private func sendRPCWithTimeout(_ method: String, params: [String: Any]?, timeout seconds: Int) async throws -> AnyCodable? {
+        if method != "connect" {
+            try await ensureConnected(timeoutSeconds: min(max(seconds, 5), 20))
+        }
         guard let ws = webSocketTask else {
             throw GatewayError(code: -1, message: "Not connected to gateway")
+        }
+        if method != "connect", !connectionState.isConnected {
+            throw GatewayError(code: -1, message: "Gateway is not connected yet")
         }
 
         let id = UUID().uuidString
@@ -642,6 +654,39 @@ class GatewayService: ObservableObject {
         try? await Task.sleep(for: .seconds(delay))
         isReconnecting = false
         connect()
+    }
+
+    private func ensureConnected(timeoutSeconds: Int) async throws {
+        if connectionState.isConnected, webSocketTask != nil {
+            return
+        }
+
+        if webSocketTask == nil, !isReconnecting {
+            connect()
+        }
+
+        let deadline = Date().addingTimeInterval(TimeInterval(timeoutSeconds))
+        while Date() < deadline {
+            if connectionState.isConnected, webSocketTask != nil {
+                return
+            }
+
+            if webSocketTask == nil, !isReconnecting {
+                connect()
+            }
+            try await Task.sleep(for: .milliseconds(200))
+        }
+
+        let message: String = {
+            if case .disconnected(let reason) = connectionState {
+                return reason ?? "Disconnected"
+            }
+            if case .connecting = connectionState {
+                return "Connecting timeout"
+            }
+            return "Unknown connection state"
+        }()
+        throw GatewayError(code: -1, message: "Not connected to gateway (\(message))")
     }
 
     // MARK: - Ping
