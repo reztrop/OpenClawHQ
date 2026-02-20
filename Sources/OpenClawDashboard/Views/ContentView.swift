@@ -105,12 +105,10 @@ struct ContentView: View {
         VStack(spacing: 6) {
             Divider().background(Theme.darkBorder)
             HStack(spacing: 8) {
-                Circle()
-                    .fill(appViewModel.gatewayService.isConnected ? Theme.statusOnline : Theme.statusOffline)
-                    .frame(width: 8, height: 8)
-                Text(appViewModel.gatewayService.isConnected ? "Connected" : "Disconnected")
-                    .font(.caption)
-                    .foregroundColor(Theme.textMuted)
+                HQStatusPill(
+                    text: appViewModel.gatewayService.isConnected ? "Connected" : "Disconnected",
+                    color: appViewModel.gatewayService.isConnected ? Theme.statusOnline : Theme.statusOffline
+                )
                 Spacer()
                 SettingsLink {
                     Image(systemName: "gear")

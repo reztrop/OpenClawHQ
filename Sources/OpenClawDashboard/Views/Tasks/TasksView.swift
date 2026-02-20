@@ -10,13 +10,8 @@ struct TasksView: View {
             controlsBar
 
             if tasksVM.isExecutionPaused {
-                HStack(spacing: 8) {
-                    Image(systemName: "pause.circle.fill")
-                    Text("Task execution is paused. In-progress tasks are halted.")
-                        .font(.subheadline)
-                }
-                .foregroundColor(Theme.statusOffline)
-                .padding(.vertical, 8)
+                HQStatusPill(text: "Task execution paused — in-progress work is halted.", color: Theme.statusOffline)
+                    .padding(.vertical, 8)
             }
 
             // Kanban columns
@@ -83,7 +78,7 @@ struct TasksView: View {
             } label: {
                 Label("New Task", systemImage: "plus")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(HQButtonStyle(variant: .primary))
 
             Button {
                 tasksVM.toggleExecutionPaused()
@@ -91,7 +86,7 @@ struct TasksView: View {
                 Label(tasksVM.isExecutionPaused ? "Resume" : "Pause",
                       systemImage: tasksVM.isExecutionPaused ? "play.fill" : "pause.fill")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(HQButtonStyle(variant: tasksVM.isExecutionPaused ? .primary : .danger))
             .help(tasksVM.isExecutionPaused ? "Resume all task activity" : "Pause all task activity")
 
             Spacer()

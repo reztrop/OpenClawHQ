@@ -166,7 +166,7 @@ struct ProjectsView: View {
                       systemImage: isSidebarCollapsed ? "sidebar.right" : "sidebar.right")
                     .labelStyle(.iconOnly)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(HQButtonStyle(variant: .secondary))
             .help(isSidebarCollapsed ? "Show Projects" : "Hide Projects")
         }
     }
@@ -197,9 +197,7 @@ struct ProjectsView: View {
                     .foregroundColor(.white)
                     .lineLimit(1)
                 Spacer()
-                Text(project.blueprint.activeStage.rawValue)
-                    .font(.caption2)
-                    .foregroundColor(Theme.textMuted)
+                HQBadge(text: project.blueprint.activeStage.rawValue, tone: .neutral)
             }
             Text(project.blueprint.overview)
                 .font(.caption)

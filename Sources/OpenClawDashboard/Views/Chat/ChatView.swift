@@ -245,7 +245,7 @@ struct ChatView: View {
                       systemImage: isSidebarCollapsed ? "rectangle.leadinghalf.filled" : "rectangle.righthalf.filled")
                     .labelStyle(.iconOnly)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(HQButtonStyle(variant: .secondary))
             .help(isSidebarCollapsed ? "Show Conversations" : "Hide Conversations")
         }
         .padding(.horizontal, 14)
@@ -481,8 +481,7 @@ struct ChatView: View {
                     } label: {
                         Image(systemName: "stop.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .buttonStyle(HQButtonStyle(variant: .danger))
                     .transition(.scale.combined(with: .opacity))
                 } else {
                     // Send button
@@ -491,7 +490,7 @@ struct ChatView: View {
                     } label: {
                         Image(systemName: "paperplane.fill")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(HQButtonStyle(variant: .primary))
                     .disabled(
                         chatVM.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         && chatVM.pendingAttachments.isEmpty
@@ -601,7 +600,7 @@ struct ChatView: View {
                     Button("Add") {
                         addTagFromInput()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(HQButtonStyle(variant: .primary))
                     .disabled(newTagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
@@ -625,7 +624,7 @@ struct ChatView: View {
                 } label: {
                     Label("New", systemImage: "plus")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(HQButtonStyle(variant: .secondary))
             }
 
             ScrollView {

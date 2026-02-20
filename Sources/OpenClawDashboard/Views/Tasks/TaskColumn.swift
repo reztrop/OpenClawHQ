@@ -24,14 +24,7 @@ struct TaskColumn: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 Spacer()
-                Text("\(tasks.count)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(Theme.textMuted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Theme.darkAccent)
-                    .cornerRadius(10)
+                HQBadge(text: "\(tasks.count)", tone: .neutral)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -70,15 +63,12 @@ struct TaskColumn: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Theme.darkSurface.opacity(0.5))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            isTargeted ? status.color.opacity(0.6) : Theme.darkBorder.opacity(0.3),
-                            lineWidth: isTargeted ? 2 : 1
-                        )
-                )
+            HQPanel(
+                cornerRadius: 12,
+                surface: Theme.darkSurface.opacity(0.5),
+                border: isTargeted ? status.color.opacity(0.6) : Theme.darkBorder.opacity(0.3),
+                lineWidth: isTargeted ? 2 : 1
+            ) { Color.clear }
         )
         .dropDestination(for: TaskItem.self) { items, _ in
             onDrop(items)
