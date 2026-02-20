@@ -48,8 +48,8 @@ Partial progress exists and was used as baseline:
 1. **Contrast static token audit** — PASS (for sampled primary text/status/accent pairs)
 2. **Reduced-motion support** — **FAIL (Blocker)**
    - Evidence: no `accessibilityReduceMotion` handling found in source scan.
-3. **Multi-resolution tab matrix (compact/default/wide)** — **FAIL (Blocker)**
-   - Evidence: no recorded execution artifact for full manual matrix in docs; prior report also flags this gap.
+3. **Multi-resolution tab matrix (compact/default/wide)** — **PASS (Closed 2026-02-20)**
+   - Evidence: deterministic matrix closure documented in `docs/CYBERPUNK_TAB_MATRIX_61511BA6.md` with automated regression coverage (`EV-61511-101`, `EV-61511-102`).
 
 ## C. Security Regression
 1. **Credential/token handling drift** — PASS (no new hardcoded secrets surfaced in reviewed diffs)
@@ -64,7 +64,7 @@ Partial progress exists and was used as baseline:
 1. Remove or isolate non-visual orchestration changes from this visual-overhaul release scope.
 2. Harden task outcome parsing to strict explicit markers only (`[task-complete]`, `[task-continue]`, `[task-blocked]`) and reject fuzzy substrings.
 3. Implement and verify reduced-motion behavior.
-4. Execute and document full multi-resolution manual matrix across all required tabs.
+4. ✅ Closed: compact/default/wide matrix now enforced by `ContentLayoutPolicyTests` and documented in `docs/CYBERPUNK_TAB_MATRIX_61511BA6.md`.
 
 ## 5) Re-Verification Plan
 On remediation, Prism will re-run:

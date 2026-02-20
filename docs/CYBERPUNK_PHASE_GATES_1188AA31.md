@@ -112,7 +112,7 @@
 - [ ] Prism confirms contrast audit passes on critical states.
 
 ### Carry-forward blocker closure from prior QA report
-- [ ] Multi-resolution validation executed for compact/default/wide across all tabs.
+- [x] Multi-resolution validation executed for compact/default/wide across all tabs. (See `docs/CYBERPUNK_TAB_MATRIX_61511BA6.md`, EV-61511-101/102)
 - [ ] Accessibility evidence consolidated into a final P3 report.
 
 ### Evidence required

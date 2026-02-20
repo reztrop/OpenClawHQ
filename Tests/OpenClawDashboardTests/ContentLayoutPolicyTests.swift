@@ -2,24 +2,42 @@ import XCTest
 @testable import OpenClawDashboard
 
 final class ContentLayoutPolicyTests: XCTestCase {
+    private let compactWidth: CGFloat = ContentLayoutPolicy.compactThreshold - 1
+    private let defaultWidth: CGFloat = ContentLayoutPolicy.compactThreshold
+    private let wideWidth: CGFloat = ContentLayoutPolicy.compactThreshold + 500
+
     func testCompactChatPreservesSidebarCollapsedState() {
-        let state = ContentLayoutPolicy.state(for: 1299, selectedTab: .chat, currentSidebarCollapsed: true)
+        let collapsed = ContentLayoutPolicy.state(for: compactWidth, selectedTab: .chat, currentSidebarCollapsed: true)
+        let expanded = ContentLayoutPolicy.state(for: compactWidth, selectedTab: .chat, currentSidebarCollapsed: false)
 
-        XCTAssertTrue(state.isCompactWindow)
-        XCTAssertTrue(state.isMainSidebarCollapsed)
+        XCTAssertTrue(collapsed.isCompactWindow)
+        XCTAssertTrue(collapsed.isMainSidebarCollapsed)
+        XCTAssertTrue(expanded.isCompactWindow)
+        XCTAssertFalse(expanded.isMainSidebarCollapsed)
     }
 
-    func testCompactNonChatForcesSidebarVisible() {
-        let state = ContentLayoutPolicy.state(for: 1299, selectedTab: .tasks, currentSidebarCollapsed: true)
+    func testCompactNonChatForcesSidebarVisibleAcrossAllTabs() {
+        let nonChatTabs = AppTab.allCases.filter { $0 != .chat }
 
-        XCTAssertTrue(state.isCompactWindow)
-        XCTAssertFalse(state.isMainSidebarCollapsed)
+        for tab in nonChatTabs {
+            let state = ContentLayoutPolicy.state(for: compactWidth, selectedTab: tab, currentSidebarCollapsed: true)
+            XCTAssertTrue(state.isCompactWindow, "Expected compact for tab \(tab)")
+            XCTAssertFalse(state.isMainSidebarCollapsed, "Compact mode must force sidebar visible for tab \(tab)")
+        }
     }
 
-    func testThresholdWidthIsNotCompactAndForcesSidebarVisible() {
-        let state = ContentLayoutPolicy.state(for: ContentLayoutPolicy.compactThreshold, selectedTab: .chat, currentSidebarCollapsed: true)
+    func testDefaultAndWideWidthsForceSidebarVisibleAcrossAllTabs() {
+        let widths: [(name: String, value: CGFloat)] = [
+            ("default", defaultWidth),
+            ("wide", wideWidth)
+        ]
 
-        XCTAssertFalse(state.isCompactWindow)
-        XCTAssertFalse(state.isMainSidebarCollapsed)
+        for width in widths {
+            for tab in AppTab.allCases {
+                let state = ContentLayoutPolicy.state(for: width.value, selectedTab: tab, currentSidebarCollapsed: true)
+                XCTAssertFalse(state.isCompactWindow, "Expected \(width.name) width to be non-compact for tab \(tab)")
+                XCTAssertFalse(state.isMainSidebarCollapsed, "Expected sidebar visible for \(width.name) width on tab \(tab)")
+            }
+        }
     }
 }
