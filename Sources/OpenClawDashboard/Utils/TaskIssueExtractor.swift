@@ -113,21 +113,29 @@ enum TaskIssueExtractor {
     }
 
     static func isExternalDependencySignal(_ text: String) -> Bool {
+        let normalized = text
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         let externalSignals = [
             "blocked by host permission",
             "blocked by host permissions",
-            "host-level ui automation permissions required",
-            "dependency: host-level",
+            "host level ui automation permissions required",
+            "dependency: host level",
             "screen recording permission",
             "accessibility permission"
         ]
 
-        if externalSignals.contains(where: { text.contains($0) }) {
+        if externalSignals.contains(where: { normalized.contains($0) }) {
             return true
         }
 
-        let missingHostPermission = text.contains("host permission") && text.contains("missing")
-        let missingHostPermissions = text.contains("host permissions") && text.contains("missing")
-        return missingHostPermission || missingHostPermissions
+        let missingHostPermission = normalized.contains("host permission") && normalized.contains("missing")
+        let missingHostPermissions = normalized.contains("host permissions") && normalized.contains("missing")
+        let hostPermissionBlocker = normalized.contains("host permission") && normalized.contains("blocker")
+        let hostPermissionsBlocker = normalized.contains("host permissions") && normalized.contains("blocker")
+        return missingHostPermission || missingHostPermissions || hostPermissionBlocker || hostPermissionsBlocker
     }
 }
