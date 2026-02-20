@@ -1,5 +1,7 @@
 # OpenClaw HQ — Lofi Cyberpunk Overhaul Execution Tasks
 
+> Execution control is now frozen in `docs/CYBERPUNK_PHASE_GATES_1188AA31.md` (strict gate criteria + dependency map).
+
 **Task ID:** 48283B83-97A9-4099-AFFE-13FE8F82CEB8  
 **Status baseline:** Current visual pass already landed (theme + shell + chat foundation). This plan starts from the documented “Next Passes.”
 
