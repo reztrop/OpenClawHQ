@@ -118,4 +118,24 @@ final class TaskIssueExtractorTests: XCTestCase {
 
         XCTAssertTrue(issues.isEmpty)
     }
+
+    func testExtractIssuesIgnoresSatisfiedSingleActiveTaskRegressionIssueLine() {
+        let response = """
+        Issue: `574e168` single-active-task regression tests ✅
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertTrue(issues.isEmpty)
+    }
+
+    func testExtractIssuesIgnoresAlreadyFixedAndValidatedIssueLine() {
+        let response = """
+        Issue: Resumed from prior partial progress: this issue has already been fixed in the repo and validated.
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+
+        XCTAssertTrue(issues.isEmpty)
+    }
 }
