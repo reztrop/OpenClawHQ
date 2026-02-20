@@ -16,6 +16,20 @@ class TaskService: ObservableObject {
         var isExecutionPaused: Bool
     }
 
+    struct TaskCompactionReport {
+        struct MergeGroup {
+            let keeperId: UUID
+            let mergedIds: [UUID]
+            let projectName: String?
+            let assignedAgent: String?
+            let normalizedKey: String
+        }
+
+        let scannedActiveCount: Int
+        let mergedTaskCount: Int
+        let groups: [MergeGroup]
+    }
+
     init(filePath: String = Constants.tasksFilePath, stateFilePath: String = Constants.tasksStateFilePath) {
         self.filePath = filePath
         self.stateFilePath = stateFilePath
@@ -249,6 +263,122 @@ class TaskService: ObservableObject {
         }
     }
 
+    /// Compacts high-volume queued/ready work by merging duplicate or near-duplicate tasks.
+    /// This is intentionally conservative: only non-archived, non-verification tasks in
+    /// Ready/Queue are eligible.
+    func compactTaskBacklogIfNeeded(minimumActiveTasks: Int = 180, maxMerges: Int = 80) -> TaskCompactionReport? {
+        let eligibleIndices = tasks.indices.filter { idx in
+            let t = tasks[idx]
+            guard !t.isArchived else { return false }
+            guard !t.isVerificationTask else { return false }
+            return t.status == .scheduled || t.status == .queued
+        }
+        guard eligibleIndices.count >= minimumActiveTasks else { return nil }
+
+        var mergesRemaining = maxMerges
+        var didMutate = false
+        var groups: [TaskCompactionReport.MergeGroup] = []
+
+        // Pass 1: strict duplicates by normalized task key (project + agent + canonical title).
+        let groupedByKey = Dictionary(grouping: eligibleIndices) { index in
+            normalizedCompactionKey(for: tasks[index])
+        }
+
+        for (key, indices) in groupedByKey where indices.count > 1 && mergesRemaining > 0 {
+            let sorted = indices.sorted(by: preferredTaskIndexComparator)
+            guard let keeper = sorted.first else { continue }
+            var merged: [UUID] = []
+            for idx in sorted.dropFirst() {
+                guard mergesRemaining > 0 else { break }
+                guard !tasks[idx].isArchived else { continue }
+                tasks[idx].isArchived = true
+                tasks[idx].updatedAt = Date()
+                merged.append(tasks[idx].id)
+                mergesRemaining -= 1
+                didMutate = true
+            }
+            if !merged.isEmpty {
+                appendMergeEvidence(to: keeper, mergedIds: merged)
+                groups.append(
+                    .init(
+                        keeperId: tasks[keeper].id,
+                        mergedIds: merged,
+                        projectName: tasks[keeper].projectName,
+                        assignedAgent: tasks[keeper].assignedAgent,
+                        normalizedKey: key
+                    )
+                )
+            }
+        }
+
+        // Pass 2: near-duplicates within same project/agent bucket.
+        if mergesRemaining > 0 {
+            let secondaryEligible = tasks.indices.filter { idx in
+                let t = tasks[idx]
+                guard !t.isArchived else { return false }
+                guard !t.isVerificationTask else { return false }
+                return t.status == .scheduled || t.status == .queued
+            }
+
+            let buckets = Dictionary(grouping: secondaryEligible) { idx in
+                let t = tasks[idx]
+                return "\(t.projectId ?? "global")|\(normalizedAgent(t.assignedAgent) ?? "unassigned")"
+            }
+
+            for (_, bucket) in buckets where bucket.count >= 3 && mergesRemaining > 0 {
+                let sorted = bucket.sorted(by: preferredTaskIndexComparator)
+                var consumed = Set<Int>()
+
+                for baseIdx in sorted {
+                    guard mergesRemaining > 0 else { break }
+                    guard !consumed.contains(baseIdx), !tasks[baseIdx].isArchived else { continue }
+                    let baseTokens = normalizedTitleTokens(tasks[baseIdx].title)
+                    guard !baseTokens.isEmpty else { continue }
+
+                    var merged: [UUID] = []
+                    for candidateIdx in sorted {
+                        guard mergesRemaining > 0 else { break }
+                        guard candidateIdx != baseIdx else { continue }
+                        guard !consumed.contains(candidateIdx), !tasks[candidateIdx].isArchived else { continue }
+                        let candidateTokens = normalizedTitleTokens(tasks[candidateIdx].title)
+                        guard !candidateTokens.isEmpty else { continue }
+                        let similarity = jaccardSimilarity(baseTokens, candidateTokens)
+                        guard similarity >= 0.82 else { continue }
+
+                        tasks[candidateIdx].isArchived = true
+                        tasks[candidateIdx].updatedAt = Date()
+                        consumed.insert(candidateIdx)
+                        merged.append(tasks[candidateIdx].id)
+                        mergesRemaining -= 1
+                        didMutate = true
+                    }
+
+                    if !merged.isEmpty {
+                        consumed.insert(baseIdx)
+                        appendMergeEvidence(to: baseIdx, mergedIds: merged)
+                        groups.append(
+                            .init(
+                                keeperId: tasks[baseIdx].id,
+                                mergedIds: merged,
+                                projectName: tasks[baseIdx].projectName,
+                                assignedAgent: tasks[baseIdx].assignedAgent,
+                                normalizedKey: normalizedCompactionKey(for: tasks[baseIdx])
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        guard didMutate else { return nil }
+        saveTasks()
+        return TaskCompactionReport(
+            scannedActiveCount: eligibleIndices.count,
+            mergedTaskCount: groups.reduce(0) { $0 + $1.mergedIds.count },
+            groups: groups
+        )
+    }
+
     func tasksForStatus(_ status: TaskStatus) -> [TaskItem] {
         tasks
             .filter { $0.status == status && !$0.isArchived }
@@ -273,6 +403,16 @@ class TaskService: ObservableObject {
         case .medium: return 2
         case .low: return 3
         }
+    }
+
+    private func preferredTaskIndexComparator(_ lhs: Int, _ rhs: Int) -> Bool {
+        let left = tasks[lhs]
+        let right = tasks[rhs]
+        let lPriority = Self.priorityRank(left.priority)
+        let rPriority = Self.priorityRank(right.priority)
+        if lPriority != rPriority { return lPriority < rPriority }
+        if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
+        return left.createdAt > right.createdAt
     }
 
     @discardableResult
@@ -321,6 +461,44 @@ class TaskService: ObservableObject {
         guard let value else { return nil }
         let token = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return token.isEmpty ? nil : token
+    }
+
+    private func normalizedCompactionKey(for task: TaskItem) -> String {
+        let project = task.projectId ?? "global"
+        let agent = normalizedAgent(task.assignedAgent) ?? "unassigned"
+        let titleTokens = normalizedTitleTokens(task.title).sorted().joined(separator: " ")
+        return "\(project)|\(agent)|\(titleTokens)"
+    }
+
+    private func normalizedTitleTokens(_ text: String) -> Set<String> {
+        let stopWords: Set<String> = [
+            "the", "a", "an", "to", "for", "and", "of", "in", "on", "with", "by",
+            "task", "fix", "update", "create", "implement", "review", "check"
+        ]
+        let cleaned = text.lowercased()
+            .replacingOccurrences(of: "[^a-z0-9\\s]", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let tokens = cleaned.split(separator: " ").map(String.init)
+        return Set(tokens.filter { $0.count >= 3 && !stopWords.contains($0) })
+    }
+
+    private func jaccardSimilarity(_ lhs: Set<String>, _ rhs: Set<String>) -> Double {
+        if lhs.isEmpty || rhs.isEmpty { return 0 }
+        let intersection = lhs.intersection(rhs).count
+        let union = lhs.union(rhs).count
+        guard union > 0 else { return 0 }
+        return Double(intersection) / Double(union)
+    }
+
+    private func appendMergeEvidence(to keeperIndex: Int, mergedIds: [UUID]) {
+        guard tasks.indices.contains(keeperIndex) else { return }
+        let note = "Compacted duplicate/related tasks: \(mergedIds.map { $0.uuidString }.joined(separator: ", "))"
+        let prior = tasks[keeperIndex].lastEvidence?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let merged = prior.isEmpty ? note : "\(prior)\n\(note)"
+        tasks[keeperIndex].lastEvidence = String(merged.suffix(2400))
+        tasks[keeperIndex].lastEvidenceAt = Date()
+        tasks[keeperIndex].updatedAt = Date()
     }
 
     // MARK: - Sample Data

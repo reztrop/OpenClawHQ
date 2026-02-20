@@ -47,6 +47,7 @@ class AppViewModel: ObservableObject {
     lazy var activityLogViewModel = ActivityLogViewModel(gatewayService: gatewayService)
     private var notificationService: NotificationService?
     private lazy var taskInterventionService = TaskInterventionService(taskService: taskService, gatewayService: gatewayService)
+    private lazy var taskCompactionService = TaskCompactionService(taskService: taskService, gatewayService: gatewayService)
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -106,6 +107,10 @@ class AppViewModel: ObservableObject {
                     guard let self else { return }
                     if let interventionMessage = await self.taskInterventionService.evaluateRecurringIssueIntervention(tasks: tasks) {
                         self.errorMessage = interventionMessage
+                        return
+                    }
+                    if let compactionMessage = await self.taskCompactionService.evaluateScopeCompaction(tasks: tasks) {
+                        self.errorMessage = compactionMessage
                     }
                 }
             }
