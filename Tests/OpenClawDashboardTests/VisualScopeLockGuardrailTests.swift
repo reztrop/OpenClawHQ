@@ -13,7 +13,8 @@ final class VisualScopeLockGuardrailTests: XCTestCase {
             "recurringIssueMarkers(in evidence:",
             "writeInterventionReport(dominantIssue:",
             "notifyJarvisOfIntervention(reportPath:",
-            "interventionCooldown"
+            "interventionCooldown",
+            "private func evaluateRecurringIssueIntervention(tasks:"
         ]
 
         for symbol in forbiddenSymbols {
