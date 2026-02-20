@@ -32,12 +32,13 @@ enum TaskIssueExtractor {
             guard !isIssueNegated(lowered) else { continue }
             guard !isIssueHeading(lowered) else { continue }
             guard !isIssueResolvedSignal(lowered) else { continue }
+            guard !TaskIssueExtractor.isPassingStatusSignal(lowered) else { continue }
             guard !isExternalDependencySignal(lowered) else { continue }
             if line.count < 12 { continue }
             issues.append(line)
         }
 
-        if issues.isEmpty && containsIssueSignal(lower) && !isIssueNegated(lower) && !isIssueResolvedSignal(lower) && !isExternalDependencySignal(lower) {
+        if issues.isEmpty && containsIssueSignal(lower) && !isIssueNegated(lower) && !isIssueResolvedSignal(lower) && !TaskIssueExtractor.isPassingStatusSignal(lower) && !isExternalDependencySignal(lower) {
             let summary = contentOnly
                 .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -94,6 +95,18 @@ enum TaskIssueExtractor {
         let hasResolution = resolutionSignals.contains { text.contains($0) }
         let hasIssueAnchor = issueAnchors.contains { text.contains($0) }
         return hasResolution && hasIssueAnchor
+    }
+
+    static func isPassingStatusSignal(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.range(of: #"^(pass|passed|ok|success)\s*:\s*"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return true
+        }
+        let passingSignals = [
+            "all checks passed",
+            "no regressions found"
+        ]
+        return passingSignals.contains { normalized.contains($0) }
     }
 
     static func isExternalDependencySignal(_ text: String) -> Bool {
