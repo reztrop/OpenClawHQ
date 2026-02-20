@@ -60,7 +60,15 @@ final class VisualScopeLockGuardrailTests: XCTestCase {
             doesNotContain: [
                 "setExecutionPaused(true)",
                 "sendAgentMessage(agentId:",
-                "dominantIssue"
+                "dominantIssue",
+                "writeInterventionReport(",
+                "notifyJarvisOfIntervention(",
+                "recurringIssueMarkers(in",
+                "hasExplicitTaskBlockedOutcome(in",
+                "isExplicitBlockedOutcomeLine(",
+                "lastInterventionFingerprint",
+                "lastInterventionAt",
+                "interventionCooldown"
             ],
             context: "AppViewModel"
         )
