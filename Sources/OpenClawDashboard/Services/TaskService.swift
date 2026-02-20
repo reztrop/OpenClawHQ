@@ -66,14 +66,17 @@ class TaskService: ObservableObject {
                 saveTasks()
             }
         } catch {
-            // Preserve the corrupt/unreadable file for later recovery.
+            // Preserve a forensic snapshot of unreadable content, but never
+            // remove the primary file path (moving it can look like deletion).
             let suffix = ISO8601DateFormatter().string(from: Date())
             let corruptPath = filePath + ".corrupt-" + suffix + ".json"
             do {
-                try FileManager.default.moveItem(atPath: filePath, toPath: corruptPath)
-                print("[TaskService] Moved unreadable tasks file to: \(corruptPath)")
+                if !FileManager.default.fileExists(atPath: corruptPath) {
+                    try FileManager.default.copyItem(atPath: filePath, toPath: corruptPath)
+                    print("[TaskService] Snapshotted unreadable tasks file to: \(corruptPath)")
+                }
             } catch {
-                print("[TaskService] Failed to preserve unreadable tasks file: \(error)")
+                print("[TaskService] Failed to snapshot unreadable tasks file: \(error)")
             }
 
             if recoverTasksFromBackupIfPossible() {
