@@ -73,20 +73,18 @@ struct TasksView: View {
 
     private var controlsBar: some View {
         HStack(spacing: 10) {
-            Button {
+            HQButton(variant: .primary) {
                 tasksVM.startNewTask()
             } label: {
                 Label("New Task", systemImage: "plus")
             }
-            .buttonStyle(HQButtonStyle(variant: .primary))
 
-            Button {
+            HQButton(variant: tasksVM.isExecutionPaused ? .primary : .danger) {
                 tasksVM.toggleExecutionPaused()
             } label: {
                 Label(tasksVM.isExecutionPaused ? "Resume" : "Pause",
                       systemImage: tasksVM.isExecutionPaused ? "play.fill" : "pause.fill")
             }
-            .buttonStyle(HQButtonStyle(variant: tasksVM.isExecutionPaused ? .primary : .danger))
             .help(tasksVM.isExecutionPaused ? "Resume all task activity" : "Pause all task activity")
 
             Spacer()

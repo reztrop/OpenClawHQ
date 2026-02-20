@@ -126,6 +126,25 @@ struct HQStatusPill: View {
     }
 }
 
+struct HQButton<Label: View>: View {
+    private let action: () -> Void
+    private let variant: HQButtonStyle.Variant
+    @ViewBuilder private let label: Label
+
+    init(variant: HQButtonStyle.Variant = .secondary, action: @escaping () -> Void, @ViewBuilder label: () -> Label) {
+        self.action = action
+        self.variant = variant
+        self.label = label()
+    }
+
+    var body: some View {
+        Button(action: action) {
+            label
+        }
+        .buttonStyle(HQButtonStyle(variant: variant))
+    }
+}
+
 struct HQButtonStyle: ButtonStyle {
     enum Variant {
         case primary

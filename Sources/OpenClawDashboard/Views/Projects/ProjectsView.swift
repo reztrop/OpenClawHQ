@@ -98,18 +98,17 @@ struct ProjectsView: View {
             }
 
             if projectsVM.projects.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("No projects yet")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
-                    Text("Projects are created automatically when Jarvis confirms planning scope is ready.")
-                        .font(.caption)
-                        .foregroundColor(Theme.textSecondary)
+                HQCard(padding: 10) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("No projects yet")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text("Projects are created automatically when Jarvis confirms planning scope is ready.")
+                            .font(.caption)
+                            .foregroundColor(Theme.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.darkSurface)
-                .cornerRadius(10)
             }
 
             ScrollView {
