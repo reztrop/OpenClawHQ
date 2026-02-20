@@ -53,6 +53,13 @@ struct TaskCard: View {
                     .lineLimit(2)
             }
 
+            if let evidence = task.lastEvidence, !evidence.isEmpty {
+                Text(evidence.truncated(to: 96))
+                    .font(.caption2)
+                    .foregroundColor(Theme.neonCyan.opacity(0.9))
+                    .lineLimit(2)
+            }
+
             // Footer: Agent + time
             HStack(spacing: 6) {
                 if let projectName = task.projectName, !projectName.isEmpty {
@@ -71,7 +78,7 @@ struct TaskCard: View {
                         .foregroundColor(Theme.agentColor(for: agentName))
                 }
                 Spacer()
-                Text(task.updatedAt.relativeString)
+                Text((task.lastEvidenceAt ?? task.updatedAt).relativeString)
                     .font(.caption2)
                     .foregroundColor(Theme.textMuted)
             }

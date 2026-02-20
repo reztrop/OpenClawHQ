@@ -33,6 +33,12 @@ struct TaskDetailSheet: View {
             if let completed = task.completedAt {
                 detailRow("Completed", completed.shortString)
             }
+            if let evidenceAt = task.lastEvidenceAt {
+                detailRow("Last Activity", evidenceAt.shortString)
+            }
+            if let sessionKey = task.executionSessionKey, !sessionKey.isEmpty {
+                detailRow("Session Key", sessionKey)
+            }
 
             if let desc = task.description, !desc.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
@@ -42,6 +48,25 @@ struct TaskDetailSheet: View {
                     ScrollView {
                         Text(desc)
                             .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 180)
+                    .padding(10)
+                    .background(Theme.darkSurface)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Theme.darkBorder, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+
+            if let evidence = task.lastEvidence, !evidence.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Execution Evidence")
+                        .font(.caption)
+                        .foregroundColor(Theme.neonCyan.opacity(0.95))
+                    ScrollView {
+                        Text(evidence)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(Theme.textSecondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .frame(maxHeight: 180)

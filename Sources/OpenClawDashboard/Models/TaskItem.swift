@@ -19,6 +19,9 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
     var verificationRound: Int?
     var isVerified: Bool
     var isArchived: Bool
+    var executionSessionKey: String?
+    var lastEvidence: String?
+    var lastEvidenceAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -37,7 +40,10 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
         isVerificationTask: Bool = false,
         verificationRound: Int? = nil,
         isVerified: Bool = false,
-        isArchived: Bool = false
+        isArchived: Bool = false,
+        executionSessionKey: String? = nil,
+        lastEvidence: String? = nil,
+        lastEvidenceAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -56,6 +62,9 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
         self.verificationRound = verificationRound
         self.isVerified = isVerified
         self.isArchived = isArchived
+        self.executionSessionKey = executionSessionKey
+        self.lastEvidence = lastEvidence
+        self.lastEvidenceAt = lastEvidenceAt
     }
 
     // MARK: - Transferable
@@ -81,6 +90,9 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
         case verificationRound
         case isVerified
         case isArchived
+        case executionSessionKey
+        case lastEvidence
+        case lastEvidenceAt
     }
 
     init(from decoder: Decoder) throws {
@@ -102,6 +114,9 @@ struct TaskItem: Identifiable, Codable, Hashable, Transferable {
         verificationRound = try c.decodeIfPresent(Int.self, forKey: .verificationRound)
         isVerified = try c.decodeIfPresent(Bool.self, forKey: .isVerified) ?? false
         isArchived = try c.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        executionSessionKey = try c.decodeIfPresent(String.self, forKey: .executionSessionKey)
+        lastEvidence = try c.decodeIfPresent(String.self, forKey: .lastEvidence)
+        lastEvidenceAt = try c.decodeIfPresent(Date.self, forKey: .lastEvidenceAt)
     }
 }
 

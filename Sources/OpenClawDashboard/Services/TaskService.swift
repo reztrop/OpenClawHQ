@@ -182,6 +182,25 @@ class TaskService: ObservableObject {
         }
     }
 
+    func mutateTask(_ taskId: UUID, mutate: (inout TaskItem) -> Void) {
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else { return }
+        mutate(&tasks[index])
+        tasks[index].updatedAt = Date()
+        saveTasks()
+    }
+
+    func appendTaskEvidence(_ taskId: UUID, text: String, maxCharacters: Int = 2400) {
+        let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        mutateTask(taskId) { task in
+            let prior = task.lastEvidence?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let merged = prior.isEmpty ? cleaned : "\(prior)\n\(cleaned)"
+            let clipped = String(merged.suffix(maxCharacters))
+            task.lastEvidence = clipped
+            task.lastEvidenceAt = Date()
+        }
+    }
+
     func deleteTask(_ taskId: UUID) {
         tasks.removeAll { $0.id == taskId }
         saveTasks()
