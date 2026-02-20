@@ -63,4 +63,14 @@ final class AppViewModelIssueExtractionTests: XCTestCase {
         let issues = TaskIssueExtractor.extractIssues(from: response)
         XCTAssertTrue(issues.isEmpty)
     }
+
+    func testExtractIssuesIgnoresTruncatedHostPermissionBlockersInTaskTitles() {
+        let response = """
+        Task: Fix: Compact/default/wide matrix evidence is still blocked by host permissi...
+        [task-start]
+        """
+
+        let issues = TaskIssueExtractor.extractIssues(from: response)
+        XCTAssertTrue(issues.isEmpty)
+    }
 }

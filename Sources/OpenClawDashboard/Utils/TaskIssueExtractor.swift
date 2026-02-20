@@ -132,10 +132,15 @@ enum TaskIssueExtractor {
             return true
         }
 
-        let missingHostPermission = normalized.contains("host permission") && normalized.contains("missing")
-        let missingHostPermissions = normalized.contains("host permissions") && normalized.contains("missing")
-        let hostPermissionBlocker = normalized.contains("host permission") && normalized.contains("blocker")
-        let hostPermissionsBlocker = normalized.contains("host permissions") && normalized.contains("blocker")
-        return missingHostPermission || missingHostPermissions || hostPermissionBlocker || hostPermissionsBlocker
+        let hasHostPermissionStem = normalized.contains("host permission")
+            || normalized.contains("host permissions")
+            || normalized.contains("host permiss")
+
+        let missingHostPermission = hasHostPermissionStem && normalized.contains("missing")
+        let hostPermissionBlocker = hasHostPermissionStem && normalized.contains("blocker")
+        let blockedByHostPermission = hasHostPermissionStem && normalized.contains("blocked")
+        let requiredHostPermission = hasHostPermissionStem && normalized.contains("required")
+
+        return missingHostPermission || hostPermissionBlocker || blockedByHostPermission || requiredHostPermission
     }
 }
